@@ -11,3 +11,4 @@ coverage/
 .pnpm-store
 transcripts
 output
+pnpm-lock.yaml
