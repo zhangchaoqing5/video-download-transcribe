@@ -208,11 +208,11 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
 
         {/* Elegant Dark Calendar Dropdown */}
         {isOpen && (
-          <div className="absolute left-0 mt-2 z-50 w-72 bg-[#16171b] border border-zinc-700/90 rounded-2xl shadow-2xl p-3.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+          <div className="absolute left-0 mt-2 z-50 w-72 bg-[#16171b] border border-zinc-700/90 rounded-2xl shadow-2xl p-3.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 theme-dropdown-menu">
             {/* Header: Month / Year Navigation */}
             <div className="flex items-center justify-between pb-3 mb-2 border-b border-zinc-800/90 px-1">
               <div className="flex items-center gap-1.5 font-sans font-semibold text-xs text-zinc-100">
-                <CalendarDays className="w-4 h-4 text-emerald-400" />
+                <CalendarDays className="w-4 h-4 text-emerald-500" />
                 <span>{viewYear} 年 {MONTHS[viewMonth]}</span>
               </div>
 
@@ -237,7 +237,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
             </div>
 
             {/* Weekdays row */}
-            <div className="grid grid-cols-7 gap-1 text-center mb-1 text-[11px] font-medium text-zinc-500">
+            <div className="grid grid-cols-7 gap-1 text-center mb-1 text-[11px] font-medium text-zinc-400">
               {WEEKDAYS.map((wd, i) => (
                 <div key={i} className="py-1">
                   {wd}
@@ -253,7 +253,7 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                 return (
                   <div
                     key={`prev-${i}`}
-                    className="h-8 flex items-center justify-center text-zinc-600 font-mono text-[11px] select-none opacity-40"
+                    className="h-8 flex items-center justify-center text-zinc-400 font-mono text-[11px] select-none opacity-40"
                   >
                     {dayNum}
                   </div>
@@ -281,14 +281,14 @@ export const CustomDatePicker: React.FC<CustomDatePickerProps> = ({
                       isSelected
                         ? 'bg-emerald-500 text-white font-bold shadow-md shadow-emerald-950/50'
                         : isToday
-                        ? 'bg-zinc-800 text-emerald-400 font-semibold border border-emerald-500/40 hover:bg-zinc-700'
-                        : 'text-zinc-200 hover:bg-zinc-800 hover:text-white'
+                        ? 'bg-zinc-800/80 text-emerald-500 font-semibold border border-emerald-500/40 hover:bg-zinc-700'
+                        : 'text-zinc-200 hover:bg-zinc-800 hover:text-zinc-100'
                     }`}
                   >
                     <span>{day}</span>
                     {/* Dots indicator for days with records */}
                     {hasJobs && !isSelected && (
-                      <span className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-400" />
+                      <span className="absolute bottom-1 w-1 h-1 rounded-full bg-emerald-500" />
                     )}
                     {isSelected && (
                       <span className="absolute bottom-0.5 w-1 h-1 rounded-full bg-white" />

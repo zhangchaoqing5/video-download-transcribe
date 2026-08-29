@@ -180,3 +180,13 @@ export interface PipelineFormState {
   vadModel: string;
   transcribeExtraArgs: string[];
 }
+
+export type ThemeMode = 'dark' | 'light' | 'midnight' | 'warm';
+
+export interface ThemeOption {
+  id: ThemeMode;
+  name: string;
+  desc: string;
+  previewClass: string;
+  iconName: 'moon' | 'sun' | 'sparkles' | 'coffee';
+}

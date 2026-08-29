@@ -15,9 +15,12 @@ import {
   ModelDownloadFormState,
   TranscribeFormState,
   PipelineFormState,
+  ThemeMode,
 } from './types';
+import { getSavedTheme, applyTheme } from './utils/theme';
 
 export default function App() {
+  const [theme, setTheme] = useState<ThemeMode>(getSavedTheme);
   const [activeTab, setActiveTab] = useState<ActiveTab>('download');
   const [systemDefaults, setSystemDefaults] = useState<SystemDefaults | null>(null);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
@@ -27,6 +30,16 @@ export default function App() {
   const [workspaceOpen, setWorkspaceOpen] = useState<boolean>(false);
   const [previewFilePath, setPreviewFilePath] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
+
+  // Apply theme on initial load & theme changes
+  useEffect(() => {
+    applyTheme(theme);
+  }, [theme]);
+
+  const handleThemeChange = (newTheme: ThemeMode) => {
+    setTheme(newTheme);
+    applyTheme(newTheme);
+  };
 
   const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastMessage({ type, text });
@@ -190,7 +203,7 @@ export default function App() {
   };
 
   return (
-    <div className="min-h-screen bg-[#0c0d10] text-zinc-100 flex flex-col font-sans selection:bg-zinc-800 selection:text-zinc-100">
+    <div className="app-container min-h-screen flex flex-col font-sans">
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed bottom-6 right-6 z-50 animate-bounce">
@@ -214,6 +227,8 @@ export default function App() {
         runningJobsCount={runningJobsCount}
         onOpenDiagnostics={() => setDiagnosticsOpen(true)}
         onOpenWorkspace={() => setWorkspaceOpen(true)}
+        currentTheme={theme}
+        onThemeChange={handleThemeChange}
       />
 
       {/* Main View Area */}

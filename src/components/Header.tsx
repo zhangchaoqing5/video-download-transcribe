@@ -1,6 +1,7 @@
 import React from 'react';
 import { Video, Cpu, FileText, Layers, ListOrdered, CheckCircle2, AlertCircle, Wrench, Folder } from 'lucide-react';
-import { SystemDefaults } from '../types';
+import { SystemDefaults, ThemeMode } from '../types';
+import { ThemeSelector } from './ThemeSelector';
 
 export type ActiveTab = 'download' | 'models' | 'transcribe' | 'pipeline' | 'jobs';
 
@@ -11,6 +12,8 @@ interface HeaderProps {
   runningJobsCount: number;
   onOpenDiagnostics: () => void;
   onOpenWorkspace: () => void;
+  currentTheme: ThemeMode;
+  onThemeChange: (theme: ThemeMode) => void;
 }
 
 export const Header: React.FC<HeaderProps> = ({
@@ -20,6 +23,8 @@ export const Header: React.FC<HeaderProps> = ({
   runningJobsCount,
   onOpenDiagnostics,
   onOpenWorkspace,
+  currentTheme,
+  onThemeChange,
 }) => {
   const tabs = [
     { id: 'download' as const, label: '视频下载', icon: Video, desc: 'yt-dlp 批量下载' },
@@ -106,6 +111,9 @@ export const Header: React.FC<HeaderProps> = ({
                 </span>
               </div>
             </button>
+
+            {/* Theme Selector */}
+            <ThemeSelector currentTheme={currentTheme} onThemeChange={onThemeChange} />
           </div>
         </div>
 
