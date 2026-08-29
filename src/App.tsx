@@ -7,6 +7,7 @@ import { PipelineView } from './components/PipelineView';
 import { JobCenterView } from './components/JobCenterView';
 import { ToolDiagnosticModal } from './components/ToolDiagnosticModal';
 import { TranscriptPreviewModal } from './components/TranscriptPreviewModal';
+import { WorkspaceModal } from './components/WorkspaceModal';
 import {
   JobRecord,
   SystemDefaults,
@@ -23,10 +24,11 @@ export default function App() {
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
   const [diagnosticsOpen, setDiagnosticsOpen] = useState<boolean>(false);
+  const [workspaceOpen, setWorkspaceOpen] = useState<boolean>(false);
   const [previewFilePath, setPreviewFilePath] = useState<string | null>(null);
-  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [toastMessage, setToastMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
 
-  const showToast = (text: string, type: 'success' | 'error' = 'success') => {
+  const showToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     setToastMessage({ type, text });
     setTimeout(() => setToastMessage(null), 4000);
   };
@@ -173,9 +175,18 @@ export default function App() {
     const res = await fetch(`/api/jobs/${encodeURIComponent(jobId)}`, { method: 'DELETE' });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error || '删除任务记录失败');
-    if (selectedJobId === jobId) setSelectedJobId(null);
+    
+    // Safely update jobs in state and select next remaining job if current was selected
+    setJobs((prev) => {
+      const remaining = prev.filter((j) => j.id !== jobId);
+      if (selectedJobId === jobId) {
+        setSelectedJobId(remaining.length > 0 ? remaining[0].id : null);
+      }
+      return remaining;
+    });
+
     await fetchJobs();
-    showToast(data.message || '已删除任务记录；输出文件未删除。');
+    showToast(data.message || '已删除任务记录；输出文件未删除。', 'success');
   };
 
   return (
@@ -202,6 +213,7 @@ export default function App() {
         systemDefaults={systemDefaults}
         runningJobsCount={runningJobsCount}
         onOpenDiagnostics={() => setDiagnosticsOpen(true)}
+        onOpenWorkspace={() => setWorkspaceOpen(true)}
       />
 
       {/* Main View Area */}
@@ -248,6 +260,7 @@ export default function App() {
             onRefreshJobs={fetchJobs}
             onDeleteJob={handleDeleteJob}
             onPreviewFile={(filePath) => setPreviewFilePath(filePath)}
+            onShowToast={showToast}
           />
         )}
       </main>
@@ -258,6 +271,16 @@ export default function App() {
         onClose={() => setDiagnosticsOpen(false)}
         systemDefaults={systemDefaults}
         onRefresh={fetchDefaults}
+        onOpenWorkspace={() => setWorkspaceOpen(true)}
+      />
+
+      {/* Workspace Configuration Modal */}
+      <WorkspaceModal
+        isOpen={workspaceOpen}
+        onClose={() => setWorkspaceOpen(false)}
+        workspace={systemDefaults?.workspace || null}
+        onWorkspaceChanged={fetchDefaults}
+        onShowToast={showToast}
       />
 
       {/* Transcript Preview Modal */}

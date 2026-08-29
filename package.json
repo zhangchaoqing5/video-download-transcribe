@@ -3,20 +3,23 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "video-download-transcribe"
+  ],
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "download": "pnpm --filter @video-download-transcribe/skill run download",
-    "download-model": "pnpm --filter @video-download-transcribe/skill run download-model",
-    "transcribe": "pnpm --filter @video-download-transcribe/skill run transcribe",
-    "pipeline": "pnpm --filter @video-download-transcribe/skill run pipeline",
-    "check": "pnpm run lint && pnpm --filter @video-download-transcribe/skill run check"
+    "download": "npm --workspace=video-download-transcribe run download",
+    "download-model": "npm --workspace=video-download-transcribe run download-model",
+    "transcribe": "npm --workspace=video-download-transcribe run transcribe",
+    "pipeline": "npm --workspace=video-download-transcribe run pipeline",
+    "check": "npm run lint && npm --workspace=video-download-transcribe run check"
   },
   "dependencies": {
-    "@video-download-transcribe/skill": "workspace:*",
+    "@video-download-transcribe/skill": "*",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
@@ -29,14 +32,12 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@types/express": "^4.17.21",
     "@types/node": "^22.14.0",
     "autoprefixer": "^10.4.21",
     "esbuild": "^0.25.0",
     "tailwindcss": "^4.1.14",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
-    "vite": "^6.2.3",
-    "@types/express": "^4.17.21"
-  },
-  "packageManager": "pnpm@11.7.0"
+    "typescript": "~5.8.2"
+  }
 }

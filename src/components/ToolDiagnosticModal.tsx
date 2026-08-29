@@ -7,6 +7,7 @@ interface ToolDiagnosticModalProps {
   onClose: () => void;
   systemDefaults: SystemDefaults | null;
   onRefresh: () => void;
+  onOpenWorkspace?: () => void;
 }
 
 export const ToolDiagnosticModal: React.FC<ToolDiagnosticModalProps> = ({
@@ -14,6 +15,7 @@ export const ToolDiagnosticModal: React.FC<ToolDiagnosticModalProps> = ({
   onClose,
   systemDefaults,
   onRefresh,
+  onOpenWorkspace,
 }) => {
   const [refreshing, setRefreshing] = useState(false);
 
@@ -130,9 +132,23 @@ export const ToolDiagnosticModal: React.FC<ToolDiagnosticModalProps> = ({
 
         {/* Footer */}
         <div className="px-6 py-3.5 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between">
-          <span className="text-xs text-zinc-400">
-            工作目录: <code className="font-mono text-zinc-300 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{systemDefaults?.cwd}</code>
-          </span>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-zinc-400">
+              工作目录: <code className="font-mono text-zinc-300 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{systemDefaults?.cwd}</code>
+            </span>
+            {onOpenWorkspace && (
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  onOpenWorkspace();
+                }}
+                className="text-[11px] text-zinc-400 hover:text-zinc-200 underline cursor-pointer"
+              >
+                切换
+              </button>
+            )}
+          </div>
           <div className="flex items-center gap-2">
             <button
               onClick={handleRefresh}

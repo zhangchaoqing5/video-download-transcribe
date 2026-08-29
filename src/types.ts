@@ -58,11 +58,24 @@ export interface ToolStatus {
   error?: string;
 }
 
+export interface WorkspaceConfig {
+  currentWorkingDir: string;
+  projectRoot: string;
+  isDefault: boolean;
+  homeDir: string;
+  recentDirs: string[];
+  exists: boolean;
+  writable: boolean;
+}
+
 export interface SystemDefaults {
   defaultModelDir: string;
   defaultModel: string;
   homeDir: string;
   cwd: string;
+  projectRoot: string;
+  isDefaultCwd: boolean;
+  workspace?: WorkspaceConfig;
   tools: {
     ytDlp: ToolStatus;
     ffmpeg: ToolStatus;

@@ -17,13 +17,79 @@ const PORT = 3000;
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
-// Path resolver supporting ~
-function resolvePath(p: string): string {
-  if (!p) return process.cwd();
+const PROJECT_ROOT = process.cwd();
+const DATA_DIR = path.resolve(PROJECT_ROOT, '.local-data');
+const JOBS_DIR = path.join(DATA_DIR, 'jobs');
+const WORKSPACE_FILE = path.join(DATA_DIR, 'workspace.json');
+fs.mkdirSync(JOBS_DIR, { recursive: true });
+
+let activeWorkingDir = PROJECT_ROOT;
+let recentWorkingDirs: string[] = [PROJECT_ROOT];
+
+function isDirectoryWritable(dirPath: string): boolean {
+  try {
+    fs.accessSync(dirPath, fs.constants.W_OK | fs.constants.R_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function resolvePathToSystem(p: string, baseDir: string = activeWorkingDir): string {
+  if (!p) return baseDir;
   if (p.startsWith('~')) {
     return path.join(os.homedir(), p.slice(1));
   }
-  return path.resolve(process.cwd(), p);
+  if (path.isAbsolute(p)) {
+    return path.normalize(p);
+  }
+  return path.resolve(baseDir, p);
+}
+
+// Path resolver supporting ~ and dynamic active working directory
+function resolvePath(p: string): string {
+  return resolvePathToSystem(p, activeWorkingDir);
+}
+
+function loadWorkspaceSettings() {
+  try {
+    if (fs.existsSync(WORKSPACE_FILE)) {
+      const raw = fs.readFileSync(WORKSPACE_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      if (data.workingDirectory && typeof data.workingDirectory === 'string') {
+        const resolved = resolvePathToSystem(data.workingDirectory, PROJECT_ROOT);
+        if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+          activeWorkingDir = resolved;
+        } else {
+          activeWorkingDir = PROJECT_ROOT;
+        }
+      }
+      if (Array.isArray(data.recentDirectories)) {
+        const validRecent = data.recentDirectories
+          .filter((d: any) => typeof d === 'string' && d.trim())
+          .map((d: string) => resolvePathToSystem(d, PROJECT_ROOT));
+        recentWorkingDirs = Array.from(
+          new Set([PROJECT_ROOT, activeWorkingDir, ...validRecent])
+        ).slice(0, 15);
+      }
+    }
+  } catch (err) {
+    console.error('Failed to load workspace settings:', err);
+  }
+}
+loadWorkspaceSettings();
+
+function saveWorkspaceSettings() {
+  try {
+    const data = {
+      workingDirectory: activeWorkingDir,
+      recentDirectories: recentWorkingDirs,
+      updatedAt: new Date().toISOString(),
+    };
+    fs.writeFileSync(WORKSPACE_FILE, JSON.stringify(data, null, 2), 'utf8');
+  } catch (err) {
+    console.error('Failed to save workspace settings:', err);
+  }
 }
 
 /**
@@ -146,11 +212,6 @@ async function checkToolsAvailability(customPaths?: { ytDlp?: string; ffmpeg?: s
     whisperCli: checkBinary(whisperCliPath, ['-h']),
   };
 }
-
-// Local jobs storage directory
-const DATA_DIR = path.resolve(process.cwd(), '.local-data');
-const JOBS_DIR = path.join(DATA_DIR, 'jobs');
-fs.mkdirSync(JOBS_DIR, { recursive: true });
 
 // In-memory active SSE event emitters
 const sseClients = new Map<string, Set<express.Response>>();
@@ -300,6 +361,141 @@ app.post('/api/files/select', async (req, res) => {
   }
 });
 
+// 0.2 GET /api/workspace
+app.get('/api/workspace', (req, res) => {
+  const exists = fs.existsSync(activeWorkingDir) && fs.statSync(activeWorkingDir).isDirectory();
+  const writable = exists ? isDirectoryWritable(activeWorkingDir) : false;
+  res.json({
+    currentWorkingDir: activeWorkingDir,
+    projectRoot: PROJECT_ROOT,
+    isDefault: path.resolve(activeWorkingDir) === path.resolve(PROJECT_ROOT),
+    homeDir: os.homedir(),
+    recentDirs: recentWorkingDirs,
+    exists,
+    writable,
+  });
+});
+
+// 0.3 POST /api/workspace
+app.post('/api/workspace', (req, res) => {
+  const { directory, createIfNotExists } = req.body || {};
+  if (!directory || typeof directory !== 'string' || !directory.trim()) {
+    return res.status(400).json({ error: '请提供有效的工作目录路径。' });
+  }
+
+  const targetPath = resolvePathToSystem(directory.trim(), PROJECT_ROOT);
+
+  if (!fs.existsSync(targetPath)) {
+    if (createIfNotExists) {
+      try {
+        fs.mkdirSync(targetPath, { recursive: true });
+      } catch (err: any) {
+        return res.status(500).json({ error: `无法创建目标目录：${err.message}` });
+      }
+    } else {
+      return res.status(404).json({ error: `指定目录不存在：${targetPath}。勾选“若不存在则自动创建”可自动建立。` });
+    }
+  }
+
+  try {
+    const stat = fs.statSync(targetPath);
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ error: `指定路径不是文件夹目录：${targetPath}` });
+    }
+
+    activeWorkingDir = path.resolve(targetPath);
+    recentWorkingDirs = Array.from(new Set([activeWorkingDir, PROJECT_ROOT, ...recentWorkingDirs])).slice(0, 15);
+    saveWorkspaceSettings();
+
+    const writable = isDirectoryWritable(activeWorkingDir);
+    res.json({
+      message: '工作目录已切换并保存',
+      currentWorkingDir: activeWorkingDir,
+      projectRoot: PROJECT_ROOT,
+      isDefault: path.resolve(activeWorkingDir) === path.resolve(PROJECT_ROOT),
+      homeDir: os.homedir(),
+      recentDirs: recentWorkingDirs,
+      exists: true,
+      writable,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// 0.4 POST /api/workspace/reset
+app.post('/api/workspace/reset', (req, res) => {
+  activeWorkingDir = PROJECT_ROOT;
+  recentWorkingDirs = Array.from(new Set([PROJECT_ROOT, ...recentWorkingDirs])).slice(0, 15);
+  saveWorkspaceSettings();
+  res.json({
+    message: '工作目录已恢复为项目默认目录',
+    currentWorkingDir: activeWorkingDir,
+    projectRoot: PROJECT_ROOT,
+    isDefault: true,
+    homeDir: os.homedir(),
+    recentDirs: recentWorkingDirs,
+    exists: true,
+    writable: isDirectoryWritable(activeWorkingDir),
+  });
+});
+
+// 0.5 DELETE /api/workspace/recent
+app.delete('/api/workspace/recent', (req, res) => {
+  const { directory } = req.body || {};
+  if (directory && typeof directory === 'string') {
+    const normalized = path.resolve(resolvePathToSystem(directory, PROJECT_ROOT));
+    recentWorkingDirs = recentWorkingDirs.filter((d) => path.resolve(resolvePathToSystem(d, PROJECT_ROOT)) !== normalized);
+    if (!recentWorkingDirs.includes(PROJECT_ROOT)) {
+      recentWorkingDirs.push(PROJECT_ROOT);
+    }
+    saveWorkspaceSettings();
+  }
+  res.json({ recentDirs: recentWorkingDirs });
+});
+
+// 0.6 GET /api/workspace/browse
+app.get('/api/workspace/browse', (req, res) => {
+  try {
+    const targetDir = req.query.dir ? resolvePathToSystem(req.query.dir as string, PROJECT_ROOT) : activeWorkingDir;
+    if (!fs.existsSync(targetDir)) {
+      return res.status(404).json({ error: '目录不存在' });
+    }
+    const stat = fs.statSync(targetDir);
+    if (!stat.isDirectory()) {
+      return res.status(400).json({ error: '目标路径不是目录' });
+    }
+
+    const parentDir = path.dirname(targetDir);
+    const entries = fs.readdirSync(targetDir, { withFileTypes: true });
+
+    const directories: Array<{ name: string; path: string; isAccessible: boolean }> = [];
+    for (const entry of entries) {
+      if (entry.isDirectory() && !entry.name.startsWith('.')) {
+        const full = path.join(targetDir, entry.name);
+        try {
+          fs.accessSync(full, fs.constants.R_OK);
+          directories.push({ name: entry.name, path: full, isAccessible: true });
+        } catch {
+          directories.push({ name: entry.name, path: full, isAccessible: false });
+        }
+      }
+    }
+
+    directories.sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({
+      current: targetDir,
+      parent: parentDir !== targetDir ? parentDir : null,
+      projectRoot: PROJECT_ROOT,
+      homeDir: os.homedir(),
+      directories,
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // 1. GET /api/defaults
 app.get('/api/defaults', async (req, res) => {
   try {
@@ -335,11 +531,26 @@ app.get('/api/defaults', async (req, res) => {
       } catch {}
     }
 
+    const isDefaultCwd = path.resolve(activeWorkingDir) === path.resolve(PROJECT_ROOT);
+    const cwdExists = fs.existsSync(activeWorkingDir);
+    const cwdWritable = cwdExists ? isDirectoryWritable(activeWorkingDir) : false;
+
     res.json({
       defaultModelDir,
       defaultModel: process.env.WHISPER_DEFAULT_MODEL || 'large-v3-turbo-q5_0',
       homeDir: os.homedir(),
-      cwd: process.cwd(),
+      cwd: activeWorkingDir,
+      projectRoot: PROJECT_ROOT,
+      isDefaultCwd,
+      workspace: {
+        currentWorkingDir: activeWorkingDir,
+        projectRoot: PROJECT_ROOT,
+        isDefault: isDefaultCwd,
+        homeDir: os.homedir(),
+        recentDirs: recentWorkingDirs,
+        exists: cwdExists,
+        writable: cwdWritable,
+      },
       tools,
       installedModels,
     });
