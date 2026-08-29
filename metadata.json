@@ -1,0 +1,6 @@
+{
+  "name": "视频下载与转写控制台",
+  "description": "本地视频批量下载与 Whisper 语音转写 Web 应用，提供图形化参数配置、模型管理与任务流监控。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

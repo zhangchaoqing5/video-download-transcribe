@@ -1,0 +1,24 @@
+{
+  "name": "@video-download-transcribe/skill",
+  "version": "0.1.0",
+  "description": "Portable local video download and transcription skill.",
+  "private": true,
+  "type": "module",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./scripts/index.mjs"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "download": "node scripts/download.mjs",
+    "download-model": "node scripts/download-whisper-model.mjs",
+    "transcribe": "node scripts/transcribe.mjs",
+    "pipeline": "node scripts/pipeline.mjs",
+    "check": "node --check scripts/download.mjs && node --check scripts/download-whisper-model.mjs && node --check scripts/transcribe.mjs && node --check scripts/pipeline.mjs"
+  }
+}
