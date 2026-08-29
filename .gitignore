@@ -8,3 +8,6 @@ coverage/
 !.env.example
 .idea
 .local-data/
+.pnpm-store
+transcripts
+output
