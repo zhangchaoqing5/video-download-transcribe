@@ -1,0 +1,8 @@
+packages:
+  - video-download-transcribe
+allowBuilds:
+  # esbuild supplies the native binary used by Vite and tsx.
+  esbuild: true
+  # These packages have no-op or optional postinstall hooks for this project.
+  '@google/genai': false
+  protobufjs: false
