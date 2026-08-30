@@ -3,17 +3,20 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "workspaces": [
+    "video-download-transcribe"
+  ],
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && node scripts/build-server.mjs",
     "start": "node dist/server.cjs",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "download": "pnpm --filter @video-download-transcribe/skill run download",
-    "download-model": "pnpm --filter @video-download-transcribe/skill run download-model",
-    "transcribe": "pnpm --filter @video-download-transcribe/skill run transcribe",
-    "pipeline": "pnpm --filter @video-download-transcribe/skill run pipeline",
-    "check": "pnpm run lint && pnpm --filter @video-download-transcribe/skill run check"
+    "download": "npm --workspace=video-download-transcribe run download",
+    "download-model": "npm --workspace=video-download-transcribe run download-model",
+    "transcribe": "npm --workspace=video-download-transcribe run transcribe",
+    "pipeline": "npm --workspace=video-download-transcribe run pipeline",
+    "check": "npm run lint && npm --workspace=video-download-transcribe run check"
   },
   "dependencies": {
     "@video-download-transcribe/skill": "workspace:*",

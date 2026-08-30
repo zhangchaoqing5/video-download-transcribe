@@ -31,9 +31,9 @@ export const ToolDiagnosticModal: React.FC<ToolDiagnosticModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#121316] w-full max-w-2xl rounded-2xl shadow-2xl border border-zinc-800 overflow-hidden flex flex-col">
+      <div className="modal-content bg-[#121316] w-full max-w-2xl rounded-2xl shadow-2xl border border-zinc-800 overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60">
+        <div className="modal-header px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 flex items-center justify-center">
               <Wrench className="w-4 h-4 text-zinc-300" />
@@ -131,7 +131,7 @@ export const ToolDiagnosticModal: React.FC<ToolDiagnosticModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3.5 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between">
+        <div className="modal-footer px-6 py-3.5 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="text-xs text-zinc-400">
               工作目录: <code className="font-mono text-zinc-300 bg-zinc-900 px-1.5 py-0.5 rounded border border-zinc-800">{systemDefaults?.cwd}</code>
@@ -143,7 +143,7 @@ export const ToolDiagnosticModal: React.FC<ToolDiagnosticModalProps> = ({
                   onClose();
                   onOpenWorkspace();
                 }}
-                className="text-[11px] text-zinc-400 hover:text-zinc-200 underline cursor-pointer"
+                className="text-[11px] text-blue-400 hover:underline cursor-pointer"
               >
                 切换
               </button>
@@ -153,14 +153,14 @@ export const ToolDiagnosticModal: React.FC<ToolDiagnosticModalProps> = ({
             <button
               onClick={handleRefresh}
               disabled={refreshing}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 transition-colors cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium btn-secondary rounded-lg cursor-pointer transition-all active:scale-[0.98]"
             >
               <RefreshCw className={`w-3.5 h-3.5 text-zinc-400 ${refreshing ? 'animate-spin' : ''}`} />
               重新检测
             </button>
             <button
               onClick={onClose}
-              className="px-4 py-1.5 text-xs font-semibold bg-zinc-100 hover:bg-white text-zinc-950 rounded-lg transition-colors cursor-pointer"
+              className="px-4 py-1.5 text-xs font-semibold btn-primary rounded-lg cursor-pointer transition-all active:scale-[0.98]"
             >
               关闭
             </button>

@@ -60,9 +60,9 @@ export const TranscriptPreviewModal: React.FC<TranscriptPreviewModalProps> = ({ 
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-[#121316] w-full max-w-4xl max-h-[88vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-zinc-800">
+      <div className="modal-content bg-[#121316] w-full max-w-4xl max-h-[88vh] rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-zinc-800">
         {/* Modal Header */}
-        <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60">
+        <div className="modal-header px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/60">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 flex items-center justify-center text-zinc-100">
               <FileText className="w-4 h-4 text-zinc-300" />
@@ -79,7 +79,7 @@ export const TranscriptPreviewModal: React.FC<TranscriptPreviewModalProps> = ({ 
             <button
               onClick={handleCopy}
               disabled={loading || !content}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-lg text-zinc-200 transition-colors disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium btn-secondary rounded-lg transition-all disabled:opacity-50 cursor-pointer active:scale-[0.98]"
             >
               {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-zinc-400" />}
               {copied ? '已复制' : '复制全文'}
@@ -88,9 +88,9 @@ export const TranscriptPreviewModal: React.FC<TranscriptPreviewModalProps> = ({ 
             <button
               onClick={handleDownload}
               disabled={loading || !content}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold bg-zinc-100 hover:bg-white text-zinc-950 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-primary rounded-lg transition-all disabled:opacity-50 cursor-pointer shadow-xs active:scale-[0.98]"
             >
-              <Download className="w-3.5 h-3.5 text-zinc-900" />
+              <Download className="w-3.5 h-3.5" />
               下载文件
             </button>
 
@@ -104,7 +104,7 @@ export const TranscriptPreviewModal: React.FC<TranscriptPreviewModalProps> = ({ 
         </div>
 
         {/* Modal Content */}
-        <div className="flex-1 overflow-y-auto p-6 bg-zinc-950 font-mono text-zinc-200 text-xs leading-relaxed whitespace-pre-wrap selection:bg-zinc-700">
+        <div className="flex-1 overflow-y-auto p-6 bg-zinc-950/80 font-mono text-zinc-200 text-xs leading-relaxed whitespace-pre-wrap selection:bg-zinc-700">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-48 gap-3 text-zinc-400">
               <Loader2 className="w-6 h-6 animate-spin text-zinc-200" />

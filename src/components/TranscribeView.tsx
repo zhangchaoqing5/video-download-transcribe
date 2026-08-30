@@ -329,23 +329,28 @@ export const TranscribeView: React.FC<TranscribeViewProps> = ({
                   type="button"
                   key={fmt.value}
                   onClick={() => toggleFormat(fmt.value)}
-                  className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                    isChecked
-                      ? 'border-zinc-500 bg-zinc-800/90 text-zinc-100 ring-1 ring-zinc-500'
-                      : 'border-zinc-800 bg-zinc-900/50 hover:border-zinc-700 text-zinc-300'
+                  className={`format-card p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between group active:scale-[0.98] ${
+                    isChecked ? 'format-card-active' : ''
                   }`}
                 >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold">{fmt.label}</span>
+                  <div className="flex items-center justify-between w-full">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className={`format-checkbox w-3.5 h-3.5 rounded flex items-center justify-center border text-[10px] shrink-0 transition-colors ${
+                        isChecked ? 'format-checkbox-active font-bold' : 'text-transparent'
+                      }`}>
+                        ✓
+                      </span>
+                      <span className="text-xs font-bold truncate">{fmt.label}</span>
+                    </div>
                     <span
-                      className={`text-[10px] px-1.5 py-0.2 rounded font-medium ${
-                        isChecked ? 'bg-zinc-700 text-zinc-200' : 'bg-zinc-800 text-zinc-400 border border-zinc-700/60'
+                      className={`format-badge text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
+                        isChecked ? 'format-badge-active' : ''
                       }`}
                     >
                       {fmt.badge}
                     </span>
                   </div>
-                  <span className={`text-[11px] mt-1 line-clamp-1 ${isChecked ? 'text-zinc-300' : 'text-zinc-400'}`}>
+                  <span className={`text-[11px] mt-1.5 line-clamp-1 ${isChecked ? 'text-zinc-200' : 'text-zinc-400'}`}>
                     {fmt.description}
                   </span>
                 </button>

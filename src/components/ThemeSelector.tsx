@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Moon, Sun, Sparkles, Coffee, Check, Palette } from 'lucide-react';
+import { Sun, Sparkles, Check, Palette } from 'lucide-react';
 import { ThemeMode } from '../types';
 import { THEME_OPTIONS } from '../utils/theme';
 
@@ -34,12 +34,8 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
       case 'sun':
         return <Sun className={className} />;
       case 'sparkles':
-        return <Sparkles className={className} />;
-      case 'coffee':
-        return <Coffee className={className} />;
-      case 'moon':
       default:
-        return <Moon className={className} />;
+        return <Sparkles className={className} />;
     }
   };
 
@@ -51,22 +47,22 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-700/70 text-zinc-200 transition-all shadow-xs cursor-pointer theme-trigger-btn"
+        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium bg-zinc-900/80 hover:bg-zinc-800/90 border border-zinc-700/70 text-zinc-200 transition-all shadow-xs cursor-pointer theme-trigger-btn active:scale-95"
         title={`切换主题风格 (当前: ${activeOption.name})`}
       >
-        <Palette className="w-3.5 h-3.5 text-zinc-400 theme-icon" />
+        <Palette className="w-3.5 h-3.5 text-sky-400 theme-icon" />
         <span className="hidden sm:inline text-zinc-300 font-sans">{activeOption.name}</span>
       </button>
 
       {/* Popover Dropdown */}
       {isOpen && (
-        <div className="absolute right-0 mt-2 z-50 w-64 bg-[#16171b] border border-zinc-700/90 rounded-2xl shadow-2xl p-2.5 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 theme-dropdown-menu">
+        <div className="absolute right-0 mt-2 z-50 w-60 bg-[#0b1120] border border-zinc-700/90 rounded-2xl shadow-2xl p-2 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150 theme-dropdown-menu">
           <div className="px-2 py-1.5 mb-1 border-b border-zinc-800/80 flex items-center justify-between">
             <span className="text-xs font-semibold text-zinc-200 flex items-center gap-1.5">
-              <Palette className="w-3.5 h-3.5 text-emerald-400" />
+              <Palette className="w-3.5 h-3.5 text-sky-400" />
               界面主题风格
             </span>
-            <span className="text-[10px] text-zinc-400 font-mono">4 种配色</span>
+            <span className="text-[10px] text-zinc-400 font-mono">2 种配色</span>
           </div>
 
           <div className="space-y-1">
@@ -82,8 +78,8 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
                   }}
                   className={`w-full flex items-center justify-between p-2 rounded-xl text-left transition-all cursor-pointer ${
                     isSelected
-                      ? 'bg-zinc-800 text-zinc-100 ring-1 ring-zinc-600 shadow-xs'
-                      : 'hover:bg-zinc-800/60 text-zinc-300 hover:text-zinc-100'
+                      ? 'bg-sky-950/40 text-sky-200 border border-sky-600/40 shadow-xs'
+                      : 'hover:bg-zinc-800/60 text-zinc-300 hover:text-zinc-100 border border-transparent'
                   }`}
                 >
                   <div className="flex items-center gap-2.5">
@@ -104,7 +100,7 @@ export const ThemeSelector: React.FC<ThemeSelectorProps> = ({
                   </div>
 
                   {isSelected && (
-                    <Check className="w-4 h-4 text-emerald-400 shrink-0 ml-2" />
+                    <Check className="w-4 h-4 text-sky-400 shrink-0 ml-2" />
                   )}
                 </button>
               );

@@ -187,12 +187,12 @@ export interface PipelineFormState {
   transcribeExtraArgs: string[];
 }
 
-export type ThemeMode = 'dark' | 'light' | 'midnight' | 'warm';
+export type ThemeMode = 'midnight' | 'light';
 
 export interface ThemeOption {
   id: ThemeMode;
   name: string;
   desc: string;
   previewClass: string;
-  iconName: 'moon' | 'sun' | 'sparkles' | 'coffee';
+  iconName: 'sparkles' | 'sun';
 }
