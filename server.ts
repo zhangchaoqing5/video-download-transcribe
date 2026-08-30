@@ -456,10 +456,10 @@ app.post('/api/workspace', (req, res) => {
 // 0.4 POST /api/workspace/reset
 app.post('/api/workspace/reset', (req, res) => {
   activeWorkingDir = PROJECT_ROOT;
-  delete settings.workspace;
+  settings = {};
   saveSettings();
   res.json({
-    message: '工作目录已恢复为项目默认目录',
+    message: '所有设置已恢复为默认值',
     currentWorkingDir: activeWorkingDir,
     projectRoot: PROJECT_ROOT,
     isDefault: true,

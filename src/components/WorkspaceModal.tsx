@@ -20,6 +20,7 @@ interface WorkspaceModalProps {
   onClose: () => void;
   workspace: WorkspaceConfig | null;
   onWorkspaceChanged: () => void;
+  onAllSettingsReset: () => void;
   onShowToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -36,6 +37,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   onClose,
   workspace,
   onWorkspaceChanged,
+  onAllSettingsReset,
   onShowToast,
 }) => {
   const [customPath, setCustomPath] = useState('');
@@ -136,8 +138,8 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
       const res = await fetch('/api/workspace/reset', { method: 'POST' });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || '重置工作目录失败');
-      onShowToast('已恢复为项目默认工作目录', 'success');
-      onWorkspaceChanged();
+      onShowToast('所有设置已恢复为默认值', 'success');
+      onAllSettingsReset();
       onClose();
     } catch (err: any) {
       onShowToast(err.message, 'error');
@@ -210,10 +212,10 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                   onClick={handleResetToDefault}
                   disabled={isSubmitting}
                   className="shrink-0 flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 bg-zinc-800/80 hover:bg-zinc-700/80 rounded border border-zinc-700 transition-colors cursor-pointer"
-                  title="恢复为项目启动默认目录"
+                  title="恢复工作目录与所有页面配置的默认值"
                 >
                   <RotateCcw className="w-3 h-3" />
-                  恢复默认
+                  恢复所有默认设置
                 </button>
               )}
             </div>

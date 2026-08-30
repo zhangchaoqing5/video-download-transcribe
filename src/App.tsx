@@ -77,12 +77,13 @@ export default function App() {
     }
   }, []);
 
-  const fetchSettings = useCallback(async () => {
+  const fetchSettings = useCallback(async (force = false) => {
     try {
       const res = await fetch('/api/settings');
       if (res.ok) {
         const savedSettings = await res.json();
-        setSettings((current) => hasLocalSettingsChanges.current ? { ...savedSettings, ...current } : savedSettings);
+        setSettings((current) => force || !hasLocalSettingsChanges.current ? savedSettings : { ...savedSettings, ...current });
+        if (force) hasLocalSettingsChanges.current = false;
       }
     } catch (err) {
       console.error('Failed to fetch settings:', err);
@@ -355,6 +356,11 @@ export default function App() {
         onClose={() => setWorkspaceOpen(false)}
         workspace={systemDefaults?.workspace || null}
         onWorkspaceChanged={fetchDefaults}
+        onAllSettingsReset={() => {
+          fetchDefaults();
+          fetchSettings(true);
+          setSettingsRevision((revision) => revision + 1);
+        }}
         onShowToast={showToast}
       />
 
