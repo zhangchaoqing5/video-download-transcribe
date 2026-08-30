@@ -40,8 +40,12 @@ export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, 
   const defaultForm = useRef(formData);
   const hadPreferences = useRef(Boolean(preferences));
   const savedPreferences = useRef<UserSettings['videoDownload']>(toVideoDownloadPreferences(formData));
+  const preferencesSignature = JSON.stringify(preferences ?? null);
+  const appliedPreferencesSignature = useRef<string | null>(null);
 
   useEffect(() => {
+    if (appliedPreferencesSignature.current === preferencesSignature) return;
+    appliedPreferencesSignature.current = preferencesSignature;
     if (preferences) {
       savedPreferences.current = preferences;
       setFormData((current) => ({ ...current, ...preferences }));
@@ -50,7 +54,7 @@ export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, 
       savedPreferences.current = toVideoDownloadPreferences(defaultForm.current);
     }
     hadPreferences.current = Boolean(preferences);
-  }, [preferences]);
+  }, [preferencesSignature]);
 
   useEffect(() => {
     const next = toVideoDownloadPreferences(formData);

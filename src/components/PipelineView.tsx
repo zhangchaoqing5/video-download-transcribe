@@ -69,8 +69,12 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   const defaultForm = useRef(formData);
   const hadPreferences = useRef(Boolean(preferences));
   const savedPreferences = useRef<UserSettings['pipeline']>(toPipelinePreferences(formData));
+  const preferencesSignature = JSON.stringify(preferences ?? null);
+  const appliedPreferencesSignature = useRef<string | null>(null);
 
   useEffect(() => {
+    if (appliedPreferencesSignature.current === preferencesSignature) return;
+    appliedPreferencesSignature.current = preferencesSignature;
     if (preferences) {
       savedPreferences.current = preferences;
       setFormData((current) => ({ ...current, ...preferences }));
@@ -79,7 +83,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
       savedPreferences.current = toPipelinePreferences(defaultForm.current);
     }
     hadPreferences.current = Boolean(preferences);
-  }, [preferences]);
+  }, [preferencesSignature]);
 
   useEffect(() => {
     const next = toPipelinePreferences(formData);
