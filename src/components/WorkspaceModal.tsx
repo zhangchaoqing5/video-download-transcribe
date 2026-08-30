@@ -147,6 +147,10 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
 
   const currentDir = workspace?.currentWorkingDir || '';
   const isDefaultDir = workspace?.isDefault ?? true;
+  const previewPath = (relativePath: string) => {
+    const basePath = (customPath || currentDir).replace(/[\\/]+$/, '') || '/';
+    return basePath === '/' ? `/${relativePath}` : `${basePath}/${relativePath}`;
+  };
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
@@ -366,9 +370,9 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
               切换后，表单中的相对路径将自动相对于当前工作目录解析：
             </p>
             <div className="font-mono text-[11px] space-y-1 pl-1 text-zinc-300">
-              <div>• 视频下载输出: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{customPath || currentDir}/videos</code></div>
-              <div>• 本地转写输出: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{customPath || currentDir}/transcripts</code></div>
-              <div>• Pipeline 批次: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{customPath || currentDir}/pipeline</code></div>
+              <div>• 视频下载输出: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{previewPath('videos')}</code></div>
+              <div>• 本地转写输出: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{previewPath('transcripts')}</code></div>
+              <div>• Pipeline 批次: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{previewPath('pipeline')}</code></div>
             </div>
           </div>
         </div>
