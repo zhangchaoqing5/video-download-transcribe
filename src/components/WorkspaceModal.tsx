@@ -19,9 +19,8 @@ interface WorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
   workspace: WorkspaceConfig | null;
-  hasCustomSettings: boolean;
   onWorkspaceChanged: () => void;
-  onAllSettingsReset: () => void;
+  onAllSettingsReset: () => Promise<void>;
   onShowToast: (message: string, type?: 'success' | 'error' | 'info') => void;
 }
 
@@ -37,7 +36,6 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   isOpen,
   onClose,
   workspace,
-  hasCustomSettings,
   onWorkspaceChanged,
   onAllSettingsReset,
   onShowToast,
@@ -137,11 +135,8 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   const handleResetToDefault = async () => {
     setIsSubmitting(true);
     try {
-      const res = await fetch('/api/workspace/reset', { method: 'POST' });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || '重置工作目录失败');
+      await onAllSettingsReset();
       onShowToast('所有设置已恢复为默认值', 'success');
-      onAllSettingsReset();
       onClose();
     } catch (err: any) {
       onShowToast(err.message, 'error');
@@ -208,8 +203,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 <HardDrive className="w-4 h-4 text-zinc-400 shrink-0" />
                 <code className="text-xs font-mono text-zinc-200 truncate select-all">{currentDir}</code>
               </div>
-              {(!isDefaultDir || hasCustomSettings) && (
-                <button
+              <button
                   type="button"
                   onClick={handleResetToDefault}
                   disabled={isSubmitting}
@@ -218,8 +212,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 >
                   <RotateCcw className="w-3 h-3" />
                   恢复所有默认设置
-                </button>
-              )}
+              </button>
             </div>
           </div>
 

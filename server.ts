@@ -28,6 +28,39 @@ let activeWorkingDir = PROJECT_ROOT;
 let settings: Record<string, any> = {};
 let hasLegacyWorkspaceSettings = false;
 
+function createDefaultSettings(): Record<string, any> {
+  const modelDir = path.join(os.homedir(), '.cache', 'whisper-cpp');
+  return {
+    workspace: { workingDirectory: PROJECT_ROOT },
+    videoDownload: {
+      output: 'videos', quality: 'best', parallel: 1, cookies: 'none', browser: 'chrome', browserProfile: '', cookiesFile: '',
+      ytDlp: 'yt-dlp', ffmpeg: 'ffmpeg', jsRuntime: 'auto', remoteEjs: 'none', extraArgs: [],
+    },
+    modelDownload: {
+      model: 'large-v3-turbo-q5_0', modelDir, repository: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main', force: false,
+    },
+    transcribe: {
+      recursive: false, output: 'transcripts', overwrite: false, keepWav: false, model: 'large-v3-turbo-q5_0', modelDir,
+      whisperCli: 'whisper-cli', ffmpeg: 'ffmpeg', formats: ['txt', 'srt'], language: 'auto', task: 'transcribe', gpuEnabled: true,
+      wordTimestamps: false, prompt: '', printProgress: true, vadEnabled: false, vadModel: '', extraArgs: [],
+    },
+    pipeline: {
+      runRoot: 'pipeline', downloadParallel: 1, quality: 'best', cookies: 'none', browser: 'chrome', browserProfile: '', cookiesFile: '',
+      ytDlp: 'yt-dlp', ffmpeg: 'ffmpeg', jsRuntime: 'auto', remoteEjs: 'none', downloadExtraArgs: [], model: 'large-v3-turbo-q5_0',
+      modelDir, whisperCli: 'whisper-cli', formats: ['txt', 'srt'], language: 'auto', task: 'transcribe', gpuEnabled: true,
+      wordTimestamps: false, prompt: '', vadEnabled: false, vadModel: '', transcribeExtraArgs: [],
+    },
+  };
+}
+
+function mergeWithDefaultSettings(saved: Record<string, any>): Record<string, any> {
+  const defaults = createDefaultSettings();
+  return Object.fromEntries(Object.entries(defaults).map(([section, value]) => [
+    section,
+    { ...value, ...(saved?.[section] || {}) },
+  ]));
+}
+
 function isDirectoryWritable(dirPath: string): boolean {
   try {
     fs.accessSync(dirPath, fs.constants.W_OK | fs.constants.R_OK);
@@ -57,13 +90,16 @@ function loadSettings() {
   try {
     if (fs.existsSync(SETTINGS_FILE)) {
       const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
-      settings = JSON.parse(raw) || {};
+      settings = mergeWithDefaultSettings(JSON.parse(raw) || {});
     } else if (fs.existsSync(LEGACY_WORKSPACE_FILE)) {
       const legacy = JSON.parse(fs.readFileSync(LEGACY_WORKSPACE_FILE, 'utf8'));
+      settings = createDefaultSettings();
       if (legacy.workingDirectory && typeof legacy.workingDirectory === 'string') {
-        settings.workspace = { workingDirectory: legacy.workingDirectory };
+        settings.workspace.workingDirectory = legacy.workingDirectory;
         hasLegacyWorkspaceSettings = true;
       }
+    } else {
+      settings = createDefaultSettings();
     }
     const workingDirectory = settings.workspace?.workingDirectory;
     if (typeof workingDirectory === 'string') {
@@ -74,17 +110,15 @@ function loadSettings() {
       }
   } catch (err) {
     console.error('Failed to load settings:', err);
+    settings = createDefaultSettings();
   }
+  saveSettings();
 }
 loadSettings();
 
 function saveSettings() {
   try {
-    if (Object.keys(settings).length === 0) {
-      fs.rmSync(SETTINGS_FILE, { force: true });
-    } else {
-      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
-    }
+    fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
     if (hasLegacyWorkspaceSettings) {
       fs.rmSync(LEGACY_WORKSPACE_FILE, { force: true });
       hasLegacyWorkspaceSettings = false;
@@ -108,9 +142,9 @@ app.put('/api/settings/:section', (req, res) => {
   if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
     return res.status(400).json({ error: '设置内容必须是对象。' });
   }
-  settings[section] = req.body;
+  settings[section] = { ...createDefaultSettings()[section], ...req.body };
   saveSettings();
-  res.json(settings[section]);
+  res.json(settings);
 });
 
 app.delete('/api/settings/:section', (req, res) => {
@@ -118,9 +152,16 @@ app.delete('/api/settings/:section', (req, res) => {
   if (!PREFERENCE_SECTIONS.has(section)) {
     return res.status(404).json({ error: '未知设置项。' });
   }
-  delete settings[section];
+  settings[section] = createDefaultSettings()[section];
   saveSettings();
-  res.status(204).end();
+  res.json(settings);
+});
+
+app.post('/api/settings/reset', (req, res) => {
+  settings = createDefaultSettings();
+  activeWorkingDir = PROJECT_ROOT;
+  saveSettings();
+  res.json(settings);
 });
 
 /**
@@ -456,7 +497,7 @@ app.post('/api/workspace', (req, res) => {
 // 0.4 POST /api/workspace/reset
 app.post('/api/workspace/reset', (req, res) => {
   activeWorkingDir = PROJECT_ROOT;
-  settings = {};
+  settings.workspace = createDefaultSettings().workspace;
   saveSettings();
   res.json({
     message: '所有设置已恢复为默认值',

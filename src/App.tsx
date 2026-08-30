@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Header, ActiveTab } from './components/Header';
 import { VideoDownloadView } from './components/VideoDownloadView';
 import { WhisperModelView } from './components/WhisperModelView';
@@ -27,7 +27,6 @@ export default function App() {
   const [settings, setSettings] = useState<UserSettings>({});
   const [settingsLoaded, setSettingsLoaded] = useState(false);
   const [settingsRevision, setSettingsRevision] = useState(0);
-  const hasLocalSettingsChanges = useRef(false);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -77,13 +76,12 @@ export default function App() {
     }
   }, []);
 
-  const fetchSettings = useCallback(async (force = false) => {
+  const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch('/api/settings');
       if (res.ok) {
         const savedSettings = await res.json();
-        setSettings((current) => force || !hasLocalSettingsChanges.current ? savedSettings : { ...savedSettings, ...current });
-        if (force) hasLocalSettingsChanges.current = false;
+        setSettings(savedSettings);
       }
     } catch (err) {
       console.error('Failed to fetch settings:', err);
@@ -96,23 +94,24 @@ export default function App() {
     section: Section,
     preferences: NonNullable<UserSettings[Section]>,
   ) => {
-    hasLocalSettingsChanges.current = true;
-    setSettings((current) => ({ ...current, [section]: preferences }));
     const res = await fetch(`/api/settings/${section}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(preferences),
     });
-    if (!res.ok) console.error(`Failed to save ${section} preferences`);
+    if (!res.ok) return console.error(`Failed to save ${section} preferences`);
+    setSettings(await res.json());
   }, []);
 
   const resetPreferences = useCallback(async (section: 'videoDownload' | 'modelDownload' | 'transcribe' | 'pipeline') => {
-    hasLocalSettingsChanges.current = true;
-    setSettings((current) => {
-      const next = { ...current };
-      delete next[section];
-      return next;
-    });
     const res = await fetch(`/api/settings/${section}`, { method: 'DELETE' });
-    if (!res.ok) console.error(`Failed to reset ${section} preferences`);
+    if (!res.ok) return console.error(`Failed to reset ${section} preferences`);
+    setSettings(await res.json());
+    setSettingsRevision((revision) => revision + 1);
+  }, []);
+
+  const initializeAllSettings = useCallback(async () => {
+    const res = await fetch('/api/settings/reset', { method: 'POST' });
+    if (!res.ok) throw new Error('初始化默认设置失败');
+    setSettings(await res.json());
     setSettingsRevision((revision) => revision + 1);
   }, []);
 
@@ -136,7 +135,6 @@ export default function App() {
   }, [jobs, fetchJobs]);
 
   const runningJobsCount = jobs.filter((j) => j.status === 'running').length;
-  const hasCustomSettings = Object.keys(settings).length > 0;
 
   // 1. Submit Download Job
   const handleDownloadSubmit = async (formData: DownloadFormState) => {
@@ -356,13 +354,8 @@ export default function App() {
         isOpen={workspaceOpen}
         onClose={() => setWorkspaceOpen(false)}
         workspace={systemDefaults?.workspace || null}
-        hasCustomSettings={hasCustomSettings}
         onWorkspaceChanged={fetchDefaults}
-        onAllSettingsReset={() => {
-          fetchDefaults();
-          fetchSettings(true);
-          setSettingsRevision((revision) => revision + 1);
-        }}
+        onAllSettingsReset={initializeAllSettings}
         onShowToast={showToast}
       />
 
