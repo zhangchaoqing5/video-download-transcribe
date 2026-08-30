@@ -136,6 +136,7 @@ export default function App() {
   }, [jobs, fetchJobs]);
 
   const runningJobsCount = jobs.filter((j) => j.status === 'running').length;
+  const hasCustomSettings = Object.keys(settings).length > 0;
 
   // 1. Submit Download Job
   const handleDownloadSubmit = async (formData: DownloadFormState) => {
@@ -355,6 +356,7 @@ export default function App() {
         isOpen={workspaceOpen}
         onClose={() => setWorkspaceOpen(false)}
         workspace={systemDefaults?.workspace || null}
+        hasCustomSettings={hasCustomSettings}
         onWorkspaceChanged={fetchDefaults}
         onAllSettingsReset={() => {
           fetchDefaults();

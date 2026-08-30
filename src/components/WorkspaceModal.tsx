@@ -19,6 +19,7 @@ interface WorkspaceModalProps {
   isOpen: boolean;
   onClose: () => void;
   workspace: WorkspaceConfig | null;
+  hasCustomSettings: boolean;
   onWorkspaceChanged: () => void;
   onAllSettingsReset: () => void;
   onShowToast: (message: string, type?: 'success' | 'error' | 'info') => void;
@@ -36,6 +37,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
   isOpen,
   onClose,
   workspace,
+  hasCustomSettings,
   onWorkspaceChanged,
   onAllSettingsReset,
   onShowToast,
@@ -206,7 +208,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 <HardDrive className="w-4 h-4 text-zinc-400 shrink-0" />
                 <code className="text-xs font-mono text-zinc-200 truncate select-all">{currentDir}</code>
               </div>
-              {!isDefaultDir && (
+              {(!isDefaultDir || hasCustomSettings) && (
                 <button
                   type="button"
                   onClick={handleResetToDefault}
