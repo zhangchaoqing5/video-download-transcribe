@@ -150,9 +150,9 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-[#121316] w-full max-w-2xl rounded-2xl shadow-2xl border border-zinc-800 overflow-hidden flex flex-col max-h-[85vh]">
+      <div className="modal-content bg-[#121316] w-full max-w-2xl rounded-2xl shadow-2xl border border-zinc-800 overflow-hidden flex flex-col max-h-[85vh]">
         {/* Header */}
-        <div className="px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70">
+        <div className="modal-header px-6 py-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-950/70">
           <div className="flex items-center gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 flex items-center justify-center">
               <Folder className="w-4 h-4 text-zinc-300" />
@@ -187,7 +187,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                   </span>
                 )}
                 {workspace?.writable ? (
-                  <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded-md">
+                  <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 bg-zinc-800 text-zinc-300 rounded-md border border-zinc-700/60">
                     <CheckCircle2 className="w-3 h-3 text-emerald-400" /> 可读写
                   </span>
                 ) : (
@@ -204,14 +204,14 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 <code className="text-xs font-mono text-zinc-200 truncate select-all">{currentDir}</code>
               </div>
               <button
-                  type="button"
-                  onClick={handleResetToDefault}
-                  disabled={isSubmitting}
-                  className="shrink-0 flex items-center gap-1 text-xs text-zinc-400 hover:text-zinc-200 px-2 py-1 bg-zinc-800/80 hover:bg-zinc-700/80 rounded border border-zinc-700 transition-colors cursor-pointer"
-                  title="恢复工作目录与所有页面配置的默认值"
-                >
-                  <RotateCcw className="w-3 h-3" />
-                  恢复所有默认设置
+                type="button"
+                onClick={handleResetToDefault}
+                disabled={isSubmitting}
+                className="shrink-0 flex items-center gap-1 text-xs px-2.5 py-1 btn-secondary rounded-lg cursor-pointer"
+                title="恢复工作目录与所有页面配置的默认值"
+              >
+                <RotateCcw className="w-3 h-3" />
+                恢复所有默认设置
               </button>
             </div>
           </div>
@@ -235,23 +235,21 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 type="button"
                 onClick={handleNativeChoose}
                 disabled={nativeSelecting}
-                className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700/80 text-zinc-200 rounded-xl border border-zinc-700 text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shrink-0"
+                className="px-3.5 py-2.5 btn-secondary rounded-xl text-xs font-medium flex items-center gap-1.5 cursor-pointer shrink-0"
                 title="打开系统文件夹选择窗口"
               >
-                <FolderOpen className="w-4 h-4 text-zinc-300" />
+                <FolderOpen className="w-4 h-4 text-zinc-400" />
                 <span>系统选择</span>
               </button>
               <button
                 type="button"
                 onClick={handleToggleBrowse}
-                className={`px-3 py-2 rounded-xl border text-xs font-medium flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 ${
-                  isBrowsing
-                    ? 'bg-zinc-100 text-zinc-950 border-white'
-                    : 'bg-zinc-800 hover:bg-zinc-700/80 text-zinc-200 border-zinc-700'
+                className={`px-3.5 py-2.5 rounded-xl text-xs font-medium flex items-center gap-1.5 cursor-pointer shrink-0 transition-all ${
+                  isBrowsing ? 'btn-toggle-active shadow-xs' : 'btn-secondary'
                 }`}
                 title="在网页内展开文件夹树浏览"
               >
-                <Folder className="w-4 h-4 text-zinc-300" />
+                <Folder className="w-4 h-4" />
                 <span>内置浏览</span>
               </button>
             </div>
@@ -271,14 +269,14 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setCustomPath(workspace?.projectRoot || '')}
-                  className="text-[11px] text-zinc-400 hover:text-zinc-200 px-2 py-0.5 bg-zinc-900 rounded border border-zinc-800 transition-colors"
+                  className="text-[11px] px-2 py-0.5 btn-secondary rounded cursor-pointer"
                 >
                   项目根目录
                 </button>
                 <button
                   type="button"
                   onClick={() => setCustomPath(workspace?.homeDir || '~')}
-                  className="text-[11px] text-zinc-400 hover:text-zinc-200 px-2 py-0.5 bg-zinc-900 rounded border border-zinc-800 transition-colors"
+                  className="text-[11px] px-2 py-0.5 btn-secondary rounded cursor-pointer"
                 >
                   用户主目录 ~
                 </button>
@@ -288,7 +286,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
 
           {/* Embedded Folder Browser */}
           {isBrowsing && (
-            <div className="p-4 rounded-xl border border-zinc-700 bg-zinc-950 space-y-3">
+            <div className="p-4 rounded-xl border border-zinc-700 bg-zinc-950/80 space-y-3">
               <div className="flex items-center justify-between border-b border-zinc-800 pb-2.5">
                 <div className="flex items-center gap-2 min-w-0">
                   <span className="text-xs font-semibold text-zinc-300">浏览路径:</span>
@@ -299,7 +297,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                     type="button"
                     onClick={() => handleFetchBrowse(browseData.parent!)}
                     disabled={isLoadingBrowse}
-                    className="flex items-center gap-1 text-xs text-zinc-300 hover:text-white px-2 py-1 bg-zinc-800 rounded border border-zinc-700 cursor-pointer"
+                    className="flex items-center gap-1 text-xs px-2.5 py-1 btn-secondary rounded-lg cursor-pointer"
                   >
                     <ArrowUp className="w-3 h-3" />
                     上一级
@@ -311,7 +309,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                 <div className="py-6 text-center text-xs text-zinc-400">正在读取目录内容...</div>
               ) : (
                 <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-zinc-800/80">
+                  <div className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/70 border border-zinc-800/80">
                     <span className="text-xs text-zinc-300 font-mono flex items-center gap-1.5">
                       <Folder className="w-3.5 h-3.5 text-zinc-400" />
                       当前浏览目录 [.]
@@ -319,7 +317,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                     <button
                       type="button"
                       onClick={() => handleSelectFromBrowse(browseData?.current || '')}
-                      className="text-xs px-2.5 py-1 bg-zinc-100 text-zinc-950 font-semibold rounded hover:bg-white cursor-pointer"
+                      className="text-xs px-2.5 py-1 btn-primary font-semibold rounded-lg cursor-pointer"
                     >
                       选定此文件夹
                     </button>
@@ -330,7 +328,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                     browseData?.directories.map((dir) => (
                       <div
                         key={dir.path}
-                        className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-900 border border-transparent hover:border-zinc-800 transition-colors"
+                        className="flex items-center justify-between p-2 rounded-lg hover:bg-zinc-800/50 border border-transparent hover:border-zinc-700/50 transition-colors"
                       >
                         <button
                           type="button"
@@ -344,9 +342,9 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
                         <button
                           type="button"
                           onClick={() => handleSelectFromBrowse(dir.path)}
-                          className="text-xs px-2 py-0.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-800 rounded border border-zinc-700/60 cursor-pointer ml-2"
+                          className="text-xs px-2.5 py-1 btn-secondary font-medium rounded-lg cursor-pointer ml-2"
                         >
-                          选择
+                          <span>选择</span>
                         </button>
                       </div>
                     ))
@@ -374,7 +372,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between">
+        <div className="modal-footer px-6 py-4 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between">
           <span className="text-xs text-zinc-500">
             持久配置保存在 <code className="text-zinc-400">.local-data/settings.json</code>
           </span>
@@ -382,7 +380,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-xs font-medium text-zinc-300 hover:text-white bg-zinc-900 hover:bg-zinc-800 border border-zinc-700 rounded-xl transition-colors cursor-pointer"
+              className="px-4 py-2 text-xs font-medium btn-secondary rounded-xl cursor-pointer"
             >
               取消
             </button>
@@ -390,7 +388,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
               type="button"
               onClick={() => handleSwitchWorkspace(customPath)}
               disabled={isSubmitting || !customPath.trim()}
-              className="px-5 py-2 text-xs font-semibold bg-zinc-100 hover:bg-white text-zinc-950 rounded-xl transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+              className="px-5 py-2 text-xs font-semibold btn-primary rounded-xl cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
             >
               {isSubmitting ? '保存切换中...' : '应用并切换目录'}
             </button>
