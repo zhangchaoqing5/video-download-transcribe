@@ -25,6 +25,8 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('download');
   const [systemDefaults, setSystemDefaults] = useState<SystemDefaults | null>(null);
   const [settings, setSettings] = useState<UserSettings>({});
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [settingsRevision, setSettingsRevision] = useState(0);
   const hasLocalSettingsChanges = useRef(false);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
@@ -84,6 +86,8 @@ export default function App() {
       }
     } catch (err) {
       console.error('Failed to fetch settings:', err);
+    } finally {
+      setSettingsLoaded(true);
     }
   }, []);
 
@@ -108,6 +112,7 @@ export default function App() {
     });
     const res = await fetch(`/api/settings/${section}`, { method: 'DELETE' });
     if (!res.ok) console.error(`Failed to reset ${section} preferences`);
+    setSettingsRevision((revision) => revision + 1);
   }, []);
 
   // Initial load
@@ -272,8 +277,9 @@ export default function App() {
 
       {/* Main View Area */}
       <main className="flex-1 pb-16">
-        {activeTab === 'download' && (
+        {settingsLoaded && activeTab === 'download' && (
           <VideoDownloadView
+            key={`download-${settingsRevision}`}
             onSubmit={handleDownloadSubmit}
             isSubmitting={isSubmitting}
             preferences={settings.videoDownload}
@@ -282,8 +288,9 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'models' && (
+        {settingsLoaded && activeTab === 'models' && (
           <WhisperModelView
+            key={`models-${settingsRevision}`}
             systemDefaults={systemDefaults}
             onSubmitDownload={handleModelDownloadSubmit}
             isSubmitting={isSubmitting}
@@ -294,8 +301,9 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'transcribe' && (
+        {settingsLoaded && activeTab === 'transcribe' && (
           <TranscribeView
+            key={`transcribe-${settingsRevision}`}
             systemDefaults={systemDefaults}
             onSubmit={handleTranscribeSubmit}
             isSubmitting={isSubmitting}
@@ -306,8 +314,9 @@ export default function App() {
           />
         )}
 
-        {activeTab === 'pipeline' && (
+        {settingsLoaded && activeTab === 'pipeline' && (
           <PipelineView
+            key={`pipeline-${settingsRevision}`}
             systemDefaults={systemDefaults}
             onSubmit={handlePipelineSubmit}
             isSubmitting={isSubmitting}

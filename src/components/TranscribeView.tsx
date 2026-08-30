@@ -54,35 +54,18 @@ export const TranscribeView: React.FC<TranscribeViewProps> = ({
     vadEnabled: false,
     vadModel: '',
     extraArgs: [],
+    ...preferences,
   });
 
   const [showAdvanced, setShowAdvanced] = useState(false);
-  const defaultForm = useRef(formData);
-  const hadPreferences = useRef(Boolean(preferences));
-  const savedPreferences = useRef<UserSettings['transcribe']>(toTranscribePreferences(formData));
-  const preferencesSignature = JSON.stringify(preferences ?? null);
-  const appliedPreferencesSignature = useRef<string | null>(null);
+  const didMount = useRef(false);
+  const onPreferencesChangeRef = useRef(onPreferencesChange);
+  onPreferencesChangeRef.current = onPreferencesChange;
 
   useEffect(() => {
-    if (appliedPreferencesSignature.current === preferencesSignature) return;
-    appliedPreferencesSignature.current = preferencesSignature;
-    if (preferences) {
-      savedPreferences.current = preferences;
-      setFormData((current) => ({ ...current, ...preferences }));
-    } else if (hadPreferences.current) {
-      setFormData(defaultForm.current);
-      savedPreferences.current = toTranscribePreferences(defaultForm.current);
-    }
-    hadPreferences.current = Boolean(preferences);
-  }, [preferencesSignature]);
-
-  useEffect(() => {
-    const next = toTranscribePreferences(formData);
-    if (JSON.stringify(next) !== JSON.stringify(savedPreferences.current)) {
-      savedPreferences.current = next;
-      onPreferencesChange(next);
-    }
-  }, [formData, onPreferencesChange]);
+    if (!didMount.current) { didMount.current = true; return; }
+    onPreferencesChangeRef.current(toTranscribePreferences(formData));
+  }, [formData]);
 
   // Sync modelDir
   React.useEffect(() => {

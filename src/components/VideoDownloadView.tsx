@@ -31,38 +31,21 @@ export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, 
     jsRuntime: 'auto',
     remoteEjs: 'none',
     extraArgs: [],
+    ...preferences,
   });
 
   const [cookieRiskDismissed, setCookieRiskDismissed] = useState(false);
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [urlFileLoadedName, setUrlFileLoadedName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const defaultForm = useRef(formData);
-  const hadPreferences = useRef(Boolean(preferences));
-  const savedPreferences = useRef<UserSettings['videoDownload']>(toVideoDownloadPreferences(formData));
-  const preferencesSignature = JSON.stringify(preferences ?? null);
-  const appliedPreferencesSignature = useRef<string | null>(null);
+  const didMount = useRef(false);
+  const onPreferencesChangeRef = useRef(onPreferencesChange);
+  onPreferencesChangeRef.current = onPreferencesChange;
 
   useEffect(() => {
-    if (appliedPreferencesSignature.current === preferencesSignature) return;
-    appliedPreferencesSignature.current = preferencesSignature;
-    if (preferences) {
-      savedPreferences.current = preferences;
-      setFormData((current) => ({ ...current, ...preferences }));
-    } else if (hadPreferences.current) {
-      setFormData(defaultForm.current);
-      savedPreferences.current = toVideoDownloadPreferences(defaultForm.current);
-    }
-    hadPreferences.current = Boolean(preferences);
-  }, [preferencesSignature]);
-
-  useEffect(() => {
-    const next = toVideoDownloadPreferences(formData);
-    if (JSON.stringify(next) !== JSON.stringify(savedPreferences.current)) {
-      savedPreferences.current = next;
-      onPreferencesChange(next);
-    }
-  }, [formData, onPreferencesChange]);
+    if (!didMount.current) { didMount.current = true; return; }
+    onPreferencesChangeRef.current(toVideoDownloadPreferences(formData));
+  }, [formData]);
 
   // Compute active URL lines count
   const validUrlLines = formData.urls
