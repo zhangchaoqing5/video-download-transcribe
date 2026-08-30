@@ -216,9 +216,9 @@ async function chooseLocalPaths(kind: LocalSelectionKind): Promise<string[]> {
 }
 
 // Check availability of local CLI binaries
-function checkBinary(nameOrPath: string, args = ['--version']): { available: boolean; path: string; version?: string; error?: string } {
+function checkBinary(nameOrPath: string, args = ['--version'], timeout = 5000): { available: boolean; path: string; version?: string; error?: string } {
   try {
-    const res = spawnSync(nameOrPath, args, { encoding: 'utf8', timeout: 5000, windowsHide: true });
+    const res = spawnSync(nameOrPath, args, { encoding: 'utf8', timeout, windowsHide: true });
     if (res.error) {
       return { available: false, path: nameOrPath, error: res.error.message };
     }
@@ -240,7 +240,8 @@ async function checkToolsAvailability(customPaths?: { ytDlp?: string; ffmpeg?: s
   return {
     ytDlp: checkBinary(ytDlpPath, ['--version']),
     ffmpeg: checkBinary(ffmpegPath, ['-version']),
-    whisperCli: checkBinary(whisperCliPath, ['-h']),
+    // whisper-cli may initialise Metal/BLAS backends before rendering help on macOS.
+    whisperCli: checkBinary(whisperCliPath, ['-h'], 15_000),
   };
 }
 

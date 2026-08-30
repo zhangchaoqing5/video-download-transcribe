@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { Header, ActiveTab } from './components/Header';
 import { VideoDownloadView } from './components/VideoDownloadView';
 import { WhisperModelView } from './components/WhisperModelView';
@@ -25,6 +25,7 @@ export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('download');
   const [systemDefaults, setSystemDefaults] = useState<SystemDefaults | null>(null);
   const [settings, setSettings] = useState<UserSettings>({});
+  const hasLocalSettingsChanges = useRef(false);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -77,7 +78,10 @@ export default function App() {
   const fetchSettings = useCallback(async () => {
     try {
       const res = await fetch('/api/settings');
-      if (res.ok) setSettings(await res.json());
+      if (res.ok) {
+        const savedSettings = await res.json();
+        setSettings((current) => hasLocalSettingsChanges.current ? { ...savedSettings, ...current } : savedSettings);
+      }
     } catch (err) {
       console.error('Failed to fetch settings:', err);
     }
@@ -87,6 +91,7 @@ export default function App() {
     section: Section,
     preferences: NonNullable<UserSettings[Section]>,
   ) => {
+    hasLocalSettingsChanges.current = true;
     setSettings((current) => ({ ...current, [section]: preferences }));
     const res = await fetch(`/api/settings/${section}`, {
       method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(preferences),
@@ -95,6 +100,7 @@ export default function App() {
   }, []);
 
   const resetPreferences = useCallback(async (section: 'videoDownload' | 'modelDownload' | 'transcribe' | 'pipeline') => {
+    hasLocalSettingsChanges.current = true;
     setSettings((current) => {
       const next = { ...current };
       delete next[section];
