@@ -1,15 +1,18 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Upload, Download, AlertTriangle, ShieldCheck, Settings2, FileText, Check } from 'lucide-react';
 import { CAPABILITY_CATALOG } from '../capabilityCatalog';
 import { ExtraArgsEditor } from './ExtraArgsEditor';
-import { DownloadFormState } from '../types';
+import { DownloadFormState, UserSettings } from '../types';
 
 interface VideoDownloadViewProps {
   onSubmit: (data: DownloadFormState) => Promise<void>;
   isSubmitting: boolean;
+  preferences?: UserSettings['videoDownload'];
+  onPreferencesChange: (preferences: UserSettings['videoDownload']) => void;
+  onResetPreferences: () => void;
 }
 
-export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, isSubmitting }) => {
+export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, isSubmitting, preferences, onPreferencesChange, onResetPreferences }) => {
   const [formData, setFormData] = useState<DownloadFormState>({
     urls: '',
     output: CAPABILITY_CATALOG.defaults.downloadOutput,
@@ -30,6 +33,28 @@ export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, 
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [urlFileLoadedName, setUrlFileLoadedName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const defaultForm = useRef(formData);
+  const hadPreferences = useRef(Boolean(preferences));
+  const savedPreferences = useRef<UserSettings['videoDownload']>({ ...formData, urls: undefined } as UserSettings['videoDownload']);
+
+  useEffect(() => {
+    if (preferences) {
+      savedPreferences.current = preferences;
+      setFormData((current) => ({ ...current, ...preferences }));
+    } else if (hadPreferences.current) {
+      setFormData(defaultForm.current);
+      savedPreferences.current = { ...defaultForm.current, urls: undefined } as UserSettings['videoDownload'];
+    }
+    hadPreferences.current = Boolean(preferences);
+  }, [preferences]);
+
+  useEffect(() => {
+    const next = { ...formData, urls: undefined } as UserSettings['videoDownload'];
+    if (JSON.stringify(next) !== JSON.stringify(savedPreferences.current)) {
+      savedPreferences.current = next;
+      onPreferencesChange(next);
+    }
+  }, [formData, onPreferencesChange]);
 
   // Compute active URL lines count
   const validUrlLines = formData.urls
@@ -83,6 +108,7 @@ export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, 
             已解析: {validUrlLines.length} 个目标
           </span>
         </div>
+        <button type="button" onClick={onResetPreferences} className="text-xs text-zinc-400 hover:text-zinc-100">恢复默认设置</button>
 
         {/* URL Inputs Section */}
         <div className="space-y-4">
@@ -181,7 +207,7 @@ export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, 
               type="text"
               value={formData.output}
               onChange={(e) => setFormData({ ...formData, output: e.target.value })}
-              placeholder="output"
+              placeholder="videos"
               className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-zinc-500 text-zinc-100 font-mono"
             />
           </div>

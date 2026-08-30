@@ -63,7 +63,6 @@ export interface WorkspaceConfig {
   projectRoot: string;
   isDefault: boolean;
   homeDir: string;
-  recentDirs: string[];
   exists: boolean;
   writable: boolean;
 }
@@ -88,6 +87,14 @@ export interface SystemDefaults {
     sizeBytes: number;
     sizeFormatted: string;
   }>;
+}
+
+export interface UserSettings {
+  workspace?: { workingDirectory?: string };
+  videoDownload?: Partial<Omit<DownloadFormState, 'urls'>>;
+  modelDownload?: Partial<ModelDownloadFormState>;
+  transcribe?: Partial<Omit<TranscribeFormState, 'inputs'>>;
+  pipeline?: Partial<Omit<PipelineFormState, 'urls' | 'batchId'>>;
 }
 
 export interface DownloadFormState {
@@ -147,7 +154,6 @@ export interface PipelineFormState {
   runRoot: string;
   batchId: string;
   downloadParallel: number;
-  downloadOnly: boolean;
   // Download params
   quality: string;
   cookies: 'none' | 'browser' | 'file';

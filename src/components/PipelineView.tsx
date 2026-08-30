@@ -1,14 +1,17 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Layers, Upload, Download, Settings2, Sliders, AlertCircle, ArrowRight, Check } from 'lucide-react';
 import { CAPABILITY_CATALOG } from '../capabilityCatalog';
 import { ExtraArgsEditor } from './ExtraArgsEditor';
-import { PipelineFormState, SystemDefaults } from '../types';
+import { PipelineFormState, SystemDefaults, UserSettings } from '../types';
 
 interface PipelineViewProps {
   systemDefaults: SystemDefaults | null;
   onSubmit: (data: PipelineFormState) => Promise<void>;
   isSubmitting: boolean;
   onNavigateToModels: () => void;
+  preferences?: UserSettings['pipeline'];
+  onPreferencesChange: (preferences: UserSettings['pipeline']) => void;
+  onResetPreferences: () => void;
 }
 
 export const PipelineView: React.FC<PipelineViewProps> = ({
@@ -16,13 +19,15 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   onSubmit,
   isSubmitting,
   onNavigateToModels,
+  preferences,
+  onPreferencesChange,
+  onResetPreferences,
 }) => {
   const [formData, setFormData] = useState<PipelineFormState>({
     urls: '',
     runRoot: CAPABILITY_CATALOG.defaults.pipelineRunsRoot,
     batchId: '',
     downloadParallel: 1,
-    downloadOnly: false,
     quality: 'best',
     cookies: 'none',
     browser: 'chrome',
@@ -57,6 +62,28 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [urlFileLoadedName, setUrlFileLoadedName] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const defaultForm = useRef(formData);
+  const hadPreferences = useRef(Boolean(preferences));
+  const savedPreferences = useRef<UserSettings['pipeline']>({ ...formData, urls: undefined, batchId: undefined } as UserSettings['pipeline']);
+
+  useEffect(() => {
+    if (preferences) {
+      savedPreferences.current = preferences;
+      setFormData((current) => ({ ...current, ...preferences }));
+    } else if (hadPreferences.current) {
+      setFormData(defaultForm.current);
+      savedPreferences.current = { ...defaultForm.current, urls: undefined, batchId: undefined } as UserSettings['pipeline'];
+    }
+    hadPreferences.current = Boolean(preferences);
+  }, [preferences]);
+
+  useEffect(() => {
+    const next = { ...formData, urls: undefined, batchId: undefined } as UserSettings['pipeline'];
+    if (JSON.stringify(next) !== JSON.stringify(savedPreferences.current)) {
+      savedPreferences.current = next;
+      onPreferencesChange(next);
+    }
+  }, [formData, onPreferencesChange]);
 
   // Sync modelDir
   React.useEffect(() => {
@@ -119,8 +146,9 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-6 max-w-4xl mx-auto py-6 px-4">
-      {/* Missing model banner (if not download-only) */}
-      {!formData.downloadOnly && !isModelInstalled && (
+      <div className="text-right"><button type="button" onClick={onResetPreferences} className="text-xs text-zinc-400 hover:text-zinc-100">恢复默认设置</button></div>
+      {/* Missing model banner */}
+      {!isModelInstalled && (
         <div className="bg-amber-950/40 border border-amber-800/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-200 shadow-md">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
@@ -150,7 +178,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           <div>
             <h2 className="text-lg font-bold text-zinc-100">一键下载 + 转写 Pipeline 任务</h2>
             <p className="text-xs text-zinc-400 mt-0.5">
-              为每个目标 URL 创建独立隔离目录：<code className="text-zinc-300 bg-zinc-800 px-1 py-0.5 rounded border border-zinc-700 font-mono">runs/&lt;batch&gt;/items/&lt;task&gt;/video & transcript</code>
+              为每个目标 URL 创建独立隔离目录：<code className="text-zinc-300 bg-zinc-800 px-1 py-0.5 rounded border border-zinc-700 font-mono">pipeline/&lt;batch&gt;/items/&lt;task&gt;/video & transcript</code>
             </p>
           </div>
           <span className="text-xs font-semibold px-2.5 py-1 bg-zinc-800 text-zinc-200 border border-zinc-700 rounded-md">
@@ -199,7 +227,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
         </div>
 
         {/* Batch configuration */}
-        <div className="grid grid-cols-1 sm:grid-cols-4 gap-4 pt-3 border-t border-zinc-800">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t border-zinc-800">
           <div>
             <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
               批次根目录 (runRoot)
@@ -209,7 +237,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
               value={formData.runRoot}
               onChange={(e) => setFormData({ ...formData, runRoot: e.target.value })}
               className="w-full px-3 py-2 text-sm bg-zinc-950 border border-zinc-700 rounded-lg focus:outline-none focus:ring-1 focus:ring-zinc-500 font-mono text-zinc-100 placeholder-zinc-600"
-              placeholder="runs"
+              placeholder="pipeline"
             />
           </div>
 
@@ -243,17 +271,6 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
             </select>
           </div>
 
-          <div className="flex items-center pt-6">
-            <label className="flex items-center gap-2 text-xs font-semibold text-zinc-200 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={formData.downloadOnly}
-                onChange={(e) => setFormData({ ...formData, downloadOnly: e.target.checked })}
-                className="w-4 h-4 rounded text-zinc-900 bg-zinc-900 border-zinc-700 accent-zinc-100"
-              />
-              <span>仅下载，跳过转写阶段</span>
-            </label>
-          </div>
         </div>
       </div>
 
@@ -335,9 +352,8 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
           )}
         </div>
 
-        {/* Transcribe options if not downloadOnly */}
-        {!formData.downloadOnly && (
-          <div className="pt-4 border-t border-zinc-800 space-y-4">
+        {/* Transcribe options */}
+        <div className="pt-4 border-t border-zinc-800 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-zinc-300 mb-1.5">
@@ -419,8 +435,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
                 })}
               </div>
             </div>
-          </div>
-        )}
+        </div>
       </div>
 
       {/* Advanced Executable Paths & Extra Args */}

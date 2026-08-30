@@ -16,6 +16,7 @@ import {
   TranscribeFormState,
   PipelineFormState,
   ThemeMode,
+  UserSettings,
 } from './types';
 import { getSavedTheme, applyTheme } from './utils/theme';
 
@@ -23,6 +24,7 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeMode>(getSavedTheme);
   const [activeTab, setActiveTab] = useState<ActiveTab>('download');
   const [systemDefaults, setSystemDefaults] = useState<SystemDefaults | null>(null);
+  const [settings, setSettings] = useState<UserSettings>({});
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [selectedJobId, setSelectedJobId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
@@ -72,11 +74,42 @@ export default function App() {
     }
   }, []);
 
+  const fetchSettings = useCallback(async () => {
+    try {
+      const res = await fetch('/api/settings');
+      if (res.ok) setSettings(await res.json());
+    } catch (err) {
+      console.error('Failed to fetch settings:', err);
+    }
+  }, []);
+
+  const savePreferences = useCallback(async <Section extends keyof Pick<UserSettings, 'videoDownload' | 'modelDownload' | 'transcribe' | 'pipeline'>>(
+    section: Section,
+    preferences: NonNullable<UserSettings[Section]>,
+  ) => {
+    setSettings((current) => ({ ...current, [section]: preferences }));
+    const res = await fetch(`/api/settings/${section}`, {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(preferences),
+    });
+    if (!res.ok) console.error(`Failed to save ${section} preferences`);
+  }, []);
+
+  const resetPreferences = useCallback(async (section: 'videoDownload' | 'modelDownload' | 'transcribe' | 'pipeline') => {
+    setSettings((current) => {
+      const next = { ...current };
+      delete next[section];
+      return next;
+    });
+    const res = await fetch(`/api/settings/${section}`, { method: 'DELETE' });
+    if (!res.ok) console.error(`Failed to reset ${section} preferences`);
+  }, []);
+
   // Initial load
   useEffect(() => {
     fetchDefaults();
     fetchJobs();
-  }, [fetchDefaults, fetchJobs]);
+    fetchSettings();
+  }, [fetchDefaults, fetchJobs, fetchSettings]);
 
   // Periodic polling if there are running jobs
   useEffect(() => {
@@ -237,6 +270,9 @@ export default function App() {
           <VideoDownloadView
             onSubmit={handleDownloadSubmit}
             isSubmitting={isSubmitting}
+            preferences={settings.videoDownload}
+            onPreferencesChange={(preferences) => savePreferences('videoDownload', preferences)}
+            onResetPreferences={() => resetPreferences('videoDownload')}
           />
         )}
 
@@ -246,6 +282,9 @@ export default function App() {
             onSubmitDownload={handleModelDownloadSubmit}
             isSubmitting={isSubmitting}
             onRefreshDefaults={fetchDefaults}
+            preferences={settings.modelDownload}
+            onPreferencesChange={(preferences) => savePreferences('modelDownload', preferences)}
+            onResetPreferences={() => resetPreferences('modelDownload')}
           />
         )}
 
@@ -255,6 +294,9 @@ export default function App() {
             onSubmit={handleTranscribeSubmit}
             isSubmitting={isSubmitting}
             onNavigateToModels={() => setActiveTab('models')}
+            preferences={settings.transcribe}
+            onPreferencesChange={(preferences) => savePreferences('transcribe', preferences)}
+            onResetPreferences={() => resetPreferences('transcribe')}
           />
         )}
 
@@ -264,6 +306,9 @@ export default function App() {
             onSubmit={handlePipelineSubmit}
             isSubmitting={isSubmitting}
             onNavigateToModels={() => setActiveTab('models')}
+            preferences={settings.pipeline}
+            onPreferencesChange={(preferences) => savePreferences('pipeline', preferences)}
+            onResetPreferences={() => resetPreferences('pipeline')}
           />
         )}
 

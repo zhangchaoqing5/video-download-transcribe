@@ -1,13 +1,16 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Cpu, Download, HardDrive, ExternalLink, CheckCircle2, RotateCw, Sparkles, AlertCircle } from 'lucide-react';
 import { CAPABILITY_CATALOG, WhisperModelInfo } from '../capabilityCatalog';
-import { ModelDownloadFormState, SystemDefaults } from '../types';
+import { ModelDownloadFormState, SystemDefaults, UserSettings } from '../types';
 
 interface WhisperModelViewProps {
   systemDefaults: SystemDefaults | null;
   onSubmitDownload: (data: ModelDownloadFormState) => Promise<void>;
   isSubmitting: boolean;
   onRefreshDefaults: () => void;
+  preferences?: UserSettings['modelDownload'];
+  onPreferencesChange: (preferences: UserSettings['modelDownload']) => void;
+  onResetPreferences: () => void;
 }
 
 export const WhisperModelView: React.FC<WhisperModelViewProps> = ({
@@ -15,6 +18,9 @@ export const WhisperModelView: React.FC<WhisperModelViewProps> = ({
   onSubmitDownload,
   isSubmitting,
   onRefreshDefaults,
+  preferences,
+  onPreferencesChange,
+  onResetPreferences,
 }) => {
   const [formData, setFormData] = useState<ModelDownloadFormState>({
     model: CAPABILITY_CATALOG.defaults.defaultModel,
@@ -24,6 +30,27 @@ export const WhisperModelView: React.FC<WhisperModelViewProps> = ({
   });
 
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const defaultForm = useRef(formData);
+  const hadPreferences = useRef(Boolean(preferences));
+  const savedPreferences = useRef<UserSettings['modelDownload']>(formData);
+
+  useEffect(() => {
+    if (preferences) {
+      savedPreferences.current = preferences;
+      setFormData((current) => ({ ...current, ...preferences }));
+    } else if (hadPreferences.current) {
+      setFormData(defaultForm.current);
+      savedPreferences.current = defaultForm.current;
+    }
+    hadPreferences.current = Boolean(preferences);
+  }, [preferences]);
+
+  useEffect(() => {
+    if (JSON.stringify(formData) !== JSON.stringify(savedPreferences.current)) {
+      savedPreferences.current = formData;
+      onPreferencesChange(formData);
+    }
+  }, [formData, onPreferencesChange]);
 
   // Sync modelDir when systemDefaults is loaded if not touched
   React.useEffect(() => {
@@ -41,6 +68,7 @@ export const WhisperModelView: React.FC<WhisperModelViewProps> = ({
       ...formData,
       model: modelName,
     };
+    setFormData(target);
     onSubmitDownload(target);
   };
 
@@ -62,6 +90,9 @@ export const WhisperModelView: React.FC<WhisperModelViewProps> = ({
           </div>
 
           <div className="flex items-center gap-2">
+            <button onClick={onResetPreferences} className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-300 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/70 rounded-lg transition-colors cursor-pointer">
+              恢复默认设置
+            </button>
             <button
               onClick={onRefreshDefaults}
               className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-200 bg-zinc-800/90 hover:bg-zinc-700/90 border border-zinc-700/70 rounded-lg transition-colors cursor-pointer"

@@ -9,11 +9,8 @@ import {
   AlertTriangle,
   ChevronRight,
   ArrowUp,
-  History,
-  Trash2,
   HardDrive,
   Info,
-  Check,
   ExternalLink,
 } from 'lucide-react';
 import { WorkspaceConfig } from '../types';
@@ -146,22 +143,6 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
       onShowToast(err.message, 'error');
     } finally {
       setIsSubmitting(false);
-    }
-  };
-
-  const handleRemoveRecent = async (dirPath: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    try {
-      const res = await fetch('/api/workspace/recent', {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ directory: dirPath }),
-      });
-      if (!res.ok) throw new Error('移除历史记录失败');
-      onWorkspaceChanged();
-      onShowToast('已从历史记录中移除', 'info');
-    } catch (err: any) {
-      onShowToast(err.message, 'error');
     }
   };
 
@@ -378,65 +359,6 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
             </div>
           )}
 
-          {/* Recent Workspaces List */}
-          {workspace?.recentDirs && workspace.recentDirs.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-zinc-400 flex items-center gap-1.5">
-                  <History className="w-3.5 h-3.5" />
-                  最近使用记录
-                </span>
-                <span className="text-[11px] text-zinc-500">点击即可一键切换</span>
-              </div>
-              <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
-                {workspace.recentDirs.map((dir) => {
-                  const isCurrent = dir === currentDir;
-                  const isProjectRoot = dir === workspace.projectRoot;
-                  return (
-                    <div
-                      key={dir}
-                      onClick={() => handleSwitchWorkspace(dir)}
-                      className={`flex items-center justify-between p-2.5 rounded-xl border transition-all cursor-pointer ${
-                        isCurrent
-                          ? 'bg-zinc-900 border-zinc-600 text-zinc-100 shadow-xs'
-                          : 'bg-zinc-950/40 border-zinc-800/80 hover:bg-zinc-900 hover:border-zinc-700 text-zinc-300'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Folder className={`w-3.5 h-3.5 shrink-0 ${isCurrent ? 'text-zinc-100' : 'text-zinc-500'}`} />
-                        <code className="text-xs font-mono truncate select-all">{dir}</code>
-                        {isProjectRoot && (
-                          <span className="text-[10px] bg-zinc-800 text-zinc-400 px-1.5 py-0.2 rounded border border-zinc-700 shrink-0">
-                            默认
-                          </span>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0 ml-2">
-                        {isCurrent ? (
-                          <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-400">
-                            <Check className="w-3.5 h-3.5" /> 当前使用中
-                          </span>
-                        ) : (
-                          <span className="text-xs text-zinc-400 hover:text-zinc-200">切换</span>
-                        )}
-                        {!isProjectRoot && (
-                          <button
-                            type="button"
-                            onClick={(e) => handleRemoveRecent(dir, e)}
-                            className="p-1 text-zinc-500 hover:text-red-400 hover:bg-zinc-800 rounded transition-colors cursor-pointer"
-                            title="从历史记录中移除"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
           {/* Path Resolution Guide */}
           <div className="p-3.5 bg-zinc-900/60 rounded-xl text-xs text-zinc-400 border border-zinc-800/80 space-y-1.5">
             <div className="flex items-center gap-1.5 font-semibold text-zinc-300">
@@ -447,9 +369,9 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
               切换后，表单中的相对路径将自动相对于当前工作目录解析：
             </p>
             <div className="font-mono text-[11px] space-y-1 pl-1 text-zinc-300">
-              <div>• 视频下载输出: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{customPath || currentDir}/output</code></div>
+              <div>• 视频下载输出: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{customPath || currentDir}/videos</code></div>
               <div>• 本地转写输出: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{customPath || currentDir}/transcripts</code></div>
-              <div>• Pipeline 批次: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{customPath || currentDir}/runs</code></div>
+              <div>• Pipeline 批次: <code className="text-zinc-200 bg-zinc-950 px-1 py-0.5 rounded border border-zinc-800">{customPath || currentDir}/pipeline</code></div>
             </div>
           </div>
         </div>
@@ -457,7 +379,7 @@ export const WorkspaceModal: React.FC<WorkspaceModalProps> = ({
         {/* Footer */}
         <div className="px-6 py-4 bg-zinc-950/80 border-t border-zinc-800 flex items-center justify-between">
           <span className="text-xs text-zinc-500">
-            持久配置保存在 <code className="text-zinc-400">.local-data/workspace.json</code>
+            持久配置保存在 <code className="text-zinc-400">.local-data/settings.json</code>
           </span>
           <div className="flex items-center gap-2">
             <button

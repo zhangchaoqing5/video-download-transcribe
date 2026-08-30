@@ -20,11 +20,13 @@ app.use(express.urlencoded({ extended: true }));
 const PROJECT_ROOT = process.cwd();
 const DATA_DIR = path.resolve(PROJECT_ROOT, '.local-data');
 const JOBS_DIR = path.join(DATA_DIR, 'jobs');
-const WORKSPACE_FILE = path.join(DATA_DIR, 'workspace.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const LEGACY_WORKSPACE_FILE = path.join(DATA_DIR, 'workspace.json');
 fs.mkdirSync(JOBS_DIR, { recursive: true });
 
 let activeWorkingDir = PROJECT_ROOT;
-let recentWorkingDirs: string[] = [PROJECT_ROOT];
+let settings: Record<string, any> = {};
+let hasLegacyWorkspaceSettings = false;
 
 function isDirectoryWritable(dirPath: string): boolean {
   try {
@@ -51,46 +53,75 @@ function resolvePath(p: string): string {
   return resolvePathToSystem(p, activeWorkingDir);
 }
 
-function loadWorkspaceSettings() {
+function loadSettings() {
   try {
-    if (fs.existsSync(WORKSPACE_FILE)) {
-      const raw = fs.readFileSync(WORKSPACE_FILE, 'utf8');
-      const data = JSON.parse(raw);
-      if (data.workingDirectory && typeof data.workingDirectory === 'string') {
-        const resolved = resolvePathToSystem(data.workingDirectory, PROJECT_ROOT);
-        if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
-          activeWorkingDir = resolved;
-        } else {
-          activeWorkingDir = PROJECT_ROOT;
-        }
-      }
-      if (Array.isArray(data.recentDirectories)) {
-        const validRecent = data.recentDirectories
-          .filter((d: any) => typeof d === 'string' && d.trim())
-          .map((d: string) => resolvePathToSystem(d, PROJECT_ROOT));
-        recentWorkingDirs = Array.from(
-          new Set([PROJECT_ROOT, activeWorkingDir, ...validRecent])
-        ).slice(0, 15);
+    if (fs.existsSync(SETTINGS_FILE)) {
+      const raw = fs.readFileSync(SETTINGS_FILE, 'utf8');
+      settings = JSON.parse(raw) || {};
+    } else if (fs.existsSync(LEGACY_WORKSPACE_FILE)) {
+      const legacy = JSON.parse(fs.readFileSync(LEGACY_WORKSPACE_FILE, 'utf8'));
+      if (legacy.workingDirectory && typeof legacy.workingDirectory === 'string') {
+        settings.workspace = { workingDirectory: legacy.workingDirectory };
+        hasLegacyWorkspaceSettings = true;
       }
     }
+    const workingDirectory = settings.workspace?.workingDirectory;
+    if (typeof workingDirectory === 'string') {
+        const resolved = resolvePathToSystem(workingDirectory, PROJECT_ROOT);
+        if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
+          activeWorkingDir = resolved;
+        }
+      }
   } catch (err) {
-    console.error('Failed to load workspace settings:', err);
+    console.error('Failed to load settings:', err);
   }
 }
-loadWorkspaceSettings();
+loadSettings();
 
-function saveWorkspaceSettings() {
+function saveSettings() {
   try {
-    const data = {
-      workingDirectory: activeWorkingDir,
-      recentDirectories: recentWorkingDirs,
-      updatedAt: new Date().toISOString(),
-    };
-    fs.writeFileSync(WORKSPACE_FILE, JSON.stringify(data, null, 2), 'utf8');
+    if (Object.keys(settings).length === 0) {
+      fs.rmSync(SETTINGS_FILE, { force: true });
+    } else {
+      fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+    }
+    if (hasLegacyWorkspaceSettings) {
+      fs.rmSync(LEGACY_WORKSPACE_FILE, { force: true });
+      hasLegacyWorkspaceSettings = false;
+    }
   } catch (err) {
-    console.error('Failed to save workspace settings:', err);
+    console.error('Failed to save settings:', err);
   }
 }
+
+const PREFERENCE_SECTIONS = new Set(['videoDownload', 'transcribe', 'pipeline', 'modelDownload']);
+
+app.get('/api/settings', (req, res) => {
+  res.json(settings);
+});
+
+app.put('/api/settings/:section', (req, res) => {
+  const { section } = req.params;
+  if (!PREFERENCE_SECTIONS.has(section)) {
+    return res.status(404).json({ error: '未知设置项。' });
+  }
+  if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body)) {
+    return res.status(400).json({ error: '设置内容必须是对象。' });
+  }
+  settings[section] = req.body;
+  saveSettings();
+  res.json(settings[section]);
+});
+
+app.delete('/api/settings/:section', (req, res) => {
+  const { section } = req.params;
+  if (!PREFERENCE_SECTIONS.has(section)) {
+    return res.status(404).json({ error: '未知设置项。' });
+  }
+  delete settings[section];
+  saveSettings();
+  res.status(204).end();
+});
 
 /**
  * The UI uses the string "none" for its dropdown. The Skill intentionally
@@ -370,7 +401,6 @@ app.get('/api/workspace', (req, res) => {
     projectRoot: PROJECT_ROOT,
     isDefault: path.resolve(activeWorkingDir) === path.resolve(PROJECT_ROOT),
     homeDir: os.homedir(),
-    recentDirs: recentWorkingDirs,
     exists,
     writable,
   });
@@ -404,8 +434,8 @@ app.post('/api/workspace', (req, res) => {
     }
 
     activeWorkingDir = path.resolve(targetPath);
-    recentWorkingDirs = Array.from(new Set([activeWorkingDir, PROJECT_ROOT, ...recentWorkingDirs])).slice(0, 15);
-    saveWorkspaceSettings();
+    settings.workspace = { workingDirectory: activeWorkingDir };
+    saveSettings();
 
     const writable = isDirectoryWritable(activeWorkingDir);
     res.json({
@@ -414,7 +444,6 @@ app.post('/api/workspace', (req, res) => {
       projectRoot: PROJECT_ROOT,
       isDefault: path.resolve(activeWorkingDir) === path.resolve(PROJECT_ROOT),
       homeDir: os.homedir(),
-      recentDirs: recentWorkingDirs,
       exists: true,
       writable,
     });
@@ -426,35 +455,20 @@ app.post('/api/workspace', (req, res) => {
 // 0.4 POST /api/workspace/reset
 app.post('/api/workspace/reset', (req, res) => {
   activeWorkingDir = PROJECT_ROOT;
-  recentWorkingDirs = Array.from(new Set([PROJECT_ROOT, ...recentWorkingDirs])).slice(0, 15);
-  saveWorkspaceSettings();
+  delete settings.workspace;
+  saveSettings();
   res.json({
     message: '工作目录已恢复为项目默认目录',
     currentWorkingDir: activeWorkingDir,
     projectRoot: PROJECT_ROOT,
     isDefault: true,
     homeDir: os.homedir(),
-    recentDirs: recentWorkingDirs,
     exists: true,
     writable: isDirectoryWritable(activeWorkingDir),
   });
 });
 
-// 0.5 DELETE /api/workspace/recent
-app.delete('/api/workspace/recent', (req, res) => {
-  const { directory } = req.body || {};
-  if (directory && typeof directory === 'string') {
-    const normalized = path.resolve(resolvePathToSystem(directory, PROJECT_ROOT));
-    recentWorkingDirs = recentWorkingDirs.filter((d) => path.resolve(resolvePathToSystem(d, PROJECT_ROOT)) !== normalized);
-    if (!recentWorkingDirs.includes(PROJECT_ROOT)) {
-      recentWorkingDirs.push(PROJECT_ROOT);
-    }
-    saveWorkspaceSettings();
-  }
-  res.json({ recentDirs: recentWorkingDirs });
-});
-
-// 0.6 GET /api/workspace/browse
+// 0.5 GET /api/workspace/browse
 app.get('/api/workspace/browse', (req, res) => {
   try {
     const targetDir = req.query.dir ? resolvePathToSystem(req.query.dir as string, PROJECT_ROOT) : activeWorkingDir;
@@ -547,7 +561,6 @@ app.get('/api/defaults', async (req, res) => {
         projectRoot: PROJECT_ROOT,
         isDefault: isDefaultCwd,
         homeDir: os.homedir(),
-        recentDirs: recentWorkingDirs,
         exists: cwdExists,
         writable: cwdWritable,
       },
@@ -791,7 +804,7 @@ app.post('/api/jobs/pipeline', async (req, res) => {
     return res.status(400).json({ error: '请提供至少一个有效的视频 URL' });
   }
 
-  const runRoot = resolvePath(options.runRoot || 'runs');
+  const runRoot = resolvePath(options.runRoot || 'pipeline');
   const jobId = `job_pl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   const sanitized = sanitizeJobParams({ ...options, urls: validUrls, runRoot });
 

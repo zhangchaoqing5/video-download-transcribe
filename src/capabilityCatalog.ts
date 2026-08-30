@@ -161,9 +161,9 @@ export const CAPABILITY_CATALOG = {
 
   // Defaults
   defaults: {
-    downloadOutput: 'output',
+    downloadOutput: 'videos',
     transcribeOutput: 'transcripts',
-    pipelineRunsRoot: 'runs',
+    pipelineRunsRoot: 'pipeline',
     defaultModel: 'large-v3-turbo-q5_0',
     defaultFormats: ['txt', 'srt'],
     modelRepository: 'https://huggingface.co/ggerganov/whisper.cpp/resolve/main',

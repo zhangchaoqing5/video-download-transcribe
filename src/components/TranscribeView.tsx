@@ -1,14 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { FileText, Plus, Trash2, Settings2, AlertCircle, Cpu, Sliders, CheckSquare, Sparkles, ArrowRight } from 'lucide-react';
 import { CAPABILITY_CATALOG } from '../capabilityCatalog';
 import { ExtraArgsEditor } from './ExtraArgsEditor';
-import { TranscribeFormState, SystemDefaults } from '../types';
+import { TranscribeFormState, SystemDefaults, UserSettings } from '../types';
 
 interface TranscribeViewProps {
   systemDefaults: SystemDefaults | null;
   onSubmit: (data: TranscribeFormState) => Promise<void>;
   isSubmitting: boolean;
   onNavigateToModels: () => void;
+  preferences?: UserSettings['transcribe'];
+  onPreferencesChange: (preferences: UserSettings['transcribe']) => void;
+  onResetPreferences: () => void;
 }
 
 export const TranscribeView: React.FC<TranscribeViewProps> = ({
@@ -16,6 +19,9 @@ export const TranscribeView: React.FC<TranscribeViewProps> = ({
   onSubmit,
   isSubmitting,
   onNavigateToModels,
+  preferences,
+  onPreferencesChange,
+  onResetPreferences,
 }) => {
   const [formData, setFormData] = useState<TranscribeFormState>({
     inputs: [''],
@@ -47,6 +53,28 @@ export const TranscribeView: React.FC<TranscribeViewProps> = ({
   });
 
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const defaultForm = useRef(formData);
+  const hadPreferences = useRef(Boolean(preferences));
+  const savedPreferences = useRef<UserSettings['transcribe']>({ ...formData, inputs: undefined } as UserSettings['transcribe']);
+
+  useEffect(() => {
+    if (preferences) {
+      savedPreferences.current = preferences;
+      setFormData((current) => ({ ...current, ...preferences }));
+    } else if (hadPreferences.current) {
+      setFormData(defaultForm.current);
+      savedPreferences.current = { ...defaultForm.current, inputs: undefined } as UserSettings['transcribe'];
+    }
+    hadPreferences.current = Boolean(preferences);
+  }, [preferences]);
+
+  useEffect(() => {
+    const next = { ...formData, inputs: undefined } as UserSettings['transcribe'];
+    if (JSON.stringify(next) !== JSON.stringify(savedPreferences.current)) {
+      savedPreferences.current = next;
+      onPreferencesChange(next);
+    }
+  }, [formData, onPreferencesChange]);
 
   // Sync modelDir
   React.useEffect(() => {
@@ -127,6 +155,7 @@ export const TranscribeView: React.FC<TranscribeViewProps> = ({
 
   return (
     <form onSubmit={handleFormSubmit} className="space-y-6 max-w-4xl mx-auto py-6 px-4">
+      <div className="text-right"><button type="button" onClick={onResetPreferences} className="text-xs text-zinc-400 hover:text-zinc-100">恢复默认设置</button></div>
       {/* Top Banner / Missing Model Notice */}
       {!isModelInstalled && (
         <div className="bg-amber-950/40 border border-amber-800/60 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-200 shadow-md">
