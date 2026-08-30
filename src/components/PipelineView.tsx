@@ -14,6 +14,10 @@ interface PipelineViewProps {
   onResetPreferences: () => void;
 }
 
+function toPipelinePreferences({ urls: _urls, batchId: _batchId, ...preferences }: PipelineFormState): UserSettings['pipeline'] {
+  return preferences;
+}
+
 export const PipelineView: React.FC<PipelineViewProps> = ({
   systemDefaults,
   onSubmit,
@@ -64,7 +68,7 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const defaultForm = useRef(formData);
   const hadPreferences = useRef(Boolean(preferences));
-  const savedPreferences = useRef<UserSettings['pipeline']>({ ...formData, urls: undefined, batchId: undefined } as UserSettings['pipeline']);
+  const savedPreferences = useRef<UserSettings['pipeline']>(toPipelinePreferences(formData));
 
   useEffect(() => {
     if (preferences) {
@@ -72,13 +76,13 @@ export const PipelineView: React.FC<PipelineViewProps> = ({
       setFormData((current) => ({ ...current, ...preferences }));
     } else if (hadPreferences.current) {
       setFormData(defaultForm.current);
-      savedPreferences.current = { ...defaultForm.current, urls: undefined, batchId: undefined } as UserSettings['pipeline'];
+      savedPreferences.current = toPipelinePreferences(defaultForm.current);
     }
     hadPreferences.current = Boolean(preferences);
   }, [preferences]);
 
   useEffect(() => {
-    const next = { ...formData, urls: undefined, batchId: undefined } as UserSettings['pipeline'];
+    const next = toPipelinePreferences(formData);
     if (JSON.stringify(next) !== JSON.stringify(savedPreferences.current)) {
       savedPreferences.current = next;
       onPreferencesChange(next);

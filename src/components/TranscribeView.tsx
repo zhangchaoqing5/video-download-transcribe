@@ -14,6 +14,10 @@ interface TranscribeViewProps {
   onResetPreferences: () => void;
 }
 
+function toTranscribePreferences({ inputs: _inputs, ...preferences }: TranscribeFormState): UserSettings['transcribe'] {
+  return preferences;
+}
+
 export const TranscribeView: React.FC<TranscribeViewProps> = ({
   systemDefaults,
   onSubmit,
@@ -55,7 +59,7 @@ export const TranscribeView: React.FC<TranscribeViewProps> = ({
   const [showAdvanced, setShowAdvanced] = useState(false);
   const defaultForm = useRef(formData);
   const hadPreferences = useRef(Boolean(preferences));
-  const savedPreferences = useRef<UserSettings['transcribe']>({ ...formData, inputs: undefined } as UserSettings['transcribe']);
+  const savedPreferences = useRef<UserSettings['transcribe']>(toTranscribePreferences(formData));
 
   useEffect(() => {
     if (preferences) {
@@ -63,13 +67,13 @@ export const TranscribeView: React.FC<TranscribeViewProps> = ({
       setFormData((current) => ({ ...current, ...preferences }));
     } else if (hadPreferences.current) {
       setFormData(defaultForm.current);
-      savedPreferences.current = { ...defaultForm.current, inputs: undefined } as UserSettings['transcribe'];
+      savedPreferences.current = toTranscribePreferences(defaultForm.current);
     }
     hadPreferences.current = Boolean(preferences);
   }, [preferences]);
 
   useEffect(() => {
-    const next = { ...formData, inputs: undefined } as UserSettings['transcribe'];
+    const next = toTranscribePreferences(formData);
     if (JSON.stringify(next) !== JSON.stringify(savedPreferences.current)) {
       savedPreferences.current = next;
       onPreferencesChange(next);

@@ -12,6 +12,10 @@ interface VideoDownloadViewProps {
   onResetPreferences: () => void;
 }
 
+function toVideoDownloadPreferences({ urls: _urls, ...preferences }: DownloadFormState): UserSettings['videoDownload'] {
+  return preferences;
+}
+
 export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, isSubmitting, preferences, onPreferencesChange, onResetPreferences }) => {
   const [formData, setFormData] = useState<DownloadFormState>({
     urls: '',
@@ -35,7 +39,7 @@ export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const defaultForm = useRef(formData);
   const hadPreferences = useRef(Boolean(preferences));
-  const savedPreferences = useRef<UserSettings['videoDownload']>({ ...formData, urls: undefined } as UserSettings['videoDownload']);
+  const savedPreferences = useRef<UserSettings['videoDownload']>(toVideoDownloadPreferences(formData));
 
   useEffect(() => {
     if (preferences) {
@@ -43,13 +47,13 @@ export const VideoDownloadView: React.FC<VideoDownloadViewProps> = ({ onSubmit, 
       setFormData((current) => ({ ...current, ...preferences }));
     } else if (hadPreferences.current) {
       setFormData(defaultForm.current);
-      savedPreferences.current = { ...defaultForm.current, urls: undefined } as UserSettings['videoDownload'];
+      savedPreferences.current = toVideoDownloadPreferences(defaultForm.current);
     }
     hadPreferences.current = Boolean(preferences);
   }, [preferences]);
 
   useEffect(() => {
-    const next = { ...formData, urls: undefined } as UserSettings['videoDownload'];
+    const next = toVideoDownloadPreferences(formData);
     if (JSON.stringify(next) !== JSON.stringify(savedPreferences.current)) {
       savedPreferences.current = next;
       onPreferencesChange(next);
