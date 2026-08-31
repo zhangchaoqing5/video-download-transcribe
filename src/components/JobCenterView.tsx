@@ -25,10 +25,20 @@ import {
   Timer,
   Play,
   Hourglass,
+  Music,
+  Download,
+  Database,
+  Package,
+  Film,
+  FileCode,
+  FolderArchive,
+  ExternalLink,
 } from 'lucide-react';
-import { JobRecord, JobKind, JobStatus } from '../types';
+import { JobRecord, JobKind, JobStatus, JobOutputFile } from '../types';
 import { ConfirmModal } from './ConfirmModal';
 import { CustomDatePicker } from './CustomDatePicker';
+import { MediaPreviewModal } from './MediaPreviewModal';
+import { FileTextPreviewModal } from './TranscriptPreviewModal';
 import {
   formatDateTime,
   formatDate,
@@ -37,6 +47,13 @@ import {
   getYesterdayDateStr,
   isDateWithinDays,
 } from '../utils/date';
+import {
+  formatFileSize,
+  getFormatBadge,
+  getCategoryLabel,
+  groupOutputFiles,
+  groupPipelineOutputFiles,
+} from '../utils/outputFiles';
 
 interface JobCenterViewProps {
   jobs: JobRecord[];
@@ -75,12 +92,52 @@ export const JobCenterView: React.FC<JobCenterViewProps> = ({
   const [deletingJob, setDeletingJob] = useState<JobRecord | null>(null);
   const [isDeleting, setIsDeleting] = useState<boolean>(false);
   const [openingOutputId, setOpeningOutputId] = useState<string | null>(null);
+  const [mediaModalState, setMediaModalState] = useState<{
+    filePath: string;
+    fileName?: string;
+    fileSize?: number;
+    ext?: string;
+    mediaType: 'video' | 'audio';
+  } | null>(null);
+  const [textModalState, setTextModalState] = useState<{
+    filePath: string;
+    fileName?: string;
+    ext?: string;
+  } | null>(null);
+  const [revealingPath, setRevealingPath] = useState<string | null>(null);
   const logContainerRef = useRef<HTMLDivElement>(null);
 
   const triggerToast = (text: string, type: 'success' | 'error' | 'info' = 'success') => {
     if (onShowToast) {
       onShowToast(text, type);
     }
+  };
+
+  const handleRevealPath = async (targetPath: string) => {
+    setRevealingPath(targetPath);
+    try {
+      const res = await fetch('/api/files/reveal', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: targetPath }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || '无法在系统文件管理器中定位');
+      triggerToast('已在系统文件管理器中显示并定位', 'success');
+    } catch (err: any) {
+      triggerToast(err.message || '无法在文件管理器中定位', 'error');
+    } finally {
+      setRevealingPath(null);
+    }
+  };
+
+  const handleDownloadFile = (targetPath: string, fileName?: string) => {
+    const a = document.createElement('a');
+    a.href = `/api/files/download?path=${encodeURIComponent(targetPath)}`;
+    a.download = fileName || targetPath.split(/[\\/]/).pop() || 'download';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
   };
 
   const handleOpenDeleteModal = (job: JobRecord) => {
@@ -835,120 +892,477 @@ export const JobCenterView: React.FC<JobCenterViewProps> = ({
                   </div>
                 )}
 
-                {/* Pipeline Batch & Tasks Breakdown */}
-                {activeJobDetails.kind === 'pipeline' && activeJobDetails.pipelineBatch && (
-                  <div className="space-y-3 pt-2">
-                    <div className="flex items-center justify-between">
-                      <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                        Pipeline 批次任务状态 (batch.json / task.json)
+                {/* Result Files (成果文件) Section */}
+                <div className="space-y-3 pt-3 border-t border-zinc-800/80">
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <FolderArchive className="w-4 h-4 text-emerald-400" />
+                      <h4 className="text-xs font-bold text-zinc-200 uppercase tracking-wider">
+                        成果文件与产物 (Result Files)
                       </h4>
-                      <span className="text-xs text-zinc-400 font-mono">
-                        总计: {activeJobDetails.pipelineBatch.total || 0} | 成功: {activeJobDetails.pipelineBatch.completed || 0} | 失败: {activeJobDetails.pipelineBatch.failed || 0}
-                      </span>
+                      {activeJobDetails.outputFiles && activeJobDetails.outputFiles.length > 0 && (
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/30 text-emerald-300 font-mono text-[11px] font-bold">
+                          {activeJobDetails.outputFiles.length} 个文件
+                        </span>
+                      )}
                     </div>
 
-                    <div className="grid grid-cols-1 gap-2.5">
-                      {activeJobDetails.pipelineBatch.items?.map((item) => (
-                        <div
-                          key={item.id}
-                          className="p-3 bg-zinc-950/80 rounded-xl border border-zinc-800 text-xs space-y-2"
-                        >
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="font-mono font-bold text-zinc-100">{item.id}</span>
-                              <span
-                                className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                                  item.status === 'complete'
-                                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                                    : item.status === 'running'
-                                    ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 animate-pulse'
-                                    : item.status === 'failed'
-                                    ? 'bg-red-500/20 text-red-300 border border-red-500/40'
-                                    : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
-                                }`}
-                              >
-                                {item.status.toUpperCase()}
-                              </span>
-                            </div>
-                            <div className="flex items-center gap-2">
-                              {item.startedAt && (
-                                <span className="text-[10px] text-zinc-500 font-mono">
-                                  耗时: {formatDuration(item.startedAt, item.completedAt)}
-                                </span>
-                              )}
-                              <span className="font-mono text-zinc-400 truncate max-w-[280px]" title={item.url}>
-                                {item.url}
-                              </span>
-                            </div>
-                          </div>
+                    {activeJobDetails.outputDir && (
+                      <button
+                        type="button"
+                        onClick={() => handleOpenOutputDirectory(activeJobDetails.id)}
+                        disabled={openingOutputId === activeJobDetails.id}
+                        className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium btn-secondary rounded-lg transition-colors cursor-pointer"
+                        title="在系统文件管理器中打开整个任务输出目录"
+                      >
+                        <FolderOpen className="w-3.5 h-3.5 text-zinc-400" />
+                        <span>{openingOutputId === activeJobDetails.id ? '打开中…' : '打开任务输出目录'}</span>
+                      </button>
+                    )}
+                  </div>
 
-                          {/* Item generated output folders & files */}
-                          <div className="flex flex-wrap items-center gap-2 pt-1">
-                            {item.transcriptFiles && item.transcriptFiles.length > 0 && (
-                              <div className="flex items-center gap-1.5 flex-wrap">
-                                <span className="text-[11px] text-zinc-400">转写产物:</span>
-                                {item.transcriptFiles.map((tf, idx) => (
-                                  <button
-                                    key={idx}
-                                    type="button"
-                                    onClick={() => onPreviewFile(tf)}
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 bg-zinc-900 hover:bg-zinc-800 border border-zinc-700/80 rounded text-[11px] text-zinc-200 font-mono transition-colors cursor-pointer"
-                                    title="查看此转写文件"
+                  {/* Empty or In-progress state */}
+                  {(!activeJobDetails.outputFiles || activeJobDetails.outputFiles.length === 0) && (
+                    <div className="p-5 bg-zinc-950/60 rounded-xl border border-zinc-800/80 text-center space-y-2">
+                      <Package className="w-8 h-8 mx-auto text-zinc-600" />
+                      {activeJobDetails.status === 'running' || activeJobDetails.status === 'pending' ? (
+                        <p className="text-xs text-zinc-400">
+                          任务正在执行中，生成的音视频、字幕或文本产物将在完成后自动在此呈现。
+                        </p>
+                      ) : (
+                        <div className="space-y-1">
+                          <p className="text-xs text-zinc-300 font-medium">未在输出目录中检测到生成的文件</p>
+                          <p className="text-[11px] text-zinc-500 font-mono">
+                            目录路径: {activeJobDetails.outputDir || '未指定'}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Pipeline tasks: grouped by subtask item */}
+                  {activeJobDetails.kind === 'pipeline' && activeJobDetails.outputFiles && activeJobDetails.outputFiles.length > 0 && (() => {
+                    const pipelineData = groupPipelineOutputFiles(activeJobDetails.outputFiles, activeJobDetails.pipelineBatch);
+                    return (
+                      <div className="space-y-4">
+                        {pipelineData.subtasks.map((subtask) => (
+                          <div
+                            key={subtask.taskId}
+                            className="bg-zinc-950/90 rounded-xl border border-zinc-800/90 p-4 space-y-3 shadow-xs"
+                          >
+                            {/* Subtask Header */}
+                            <div className="flex items-center justify-between flex-wrap gap-2 pb-2 border-b border-zinc-800/70">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="font-mono font-bold text-xs text-zinc-100 bg-zinc-900 px-2 py-0.5 rounded border border-zinc-700/80 shrink-0">
+                                  {subtask.taskId}
+                                </span>
+                                <span className="text-xs font-semibold text-zinc-200 truncate max-w-md" title={subtask.url || subtask.title}>
+                                  {subtask.title}
+                                </span>
+                                {subtask.status && (
+                                  <span
+                                    className={`px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                      subtask.status === 'complete'
+                                        ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                                        : subtask.status === 'running'
+                                        ? 'bg-blue-500/20 text-blue-300 border border-blue-500/40 animate-pulse'
+                                        : subtask.status === 'failed'
+                                        ? 'bg-red-500/20 text-red-300 border border-red-500/40'
+                                        : 'bg-zinc-800 text-zinc-300 border border-zinc-700'
+                                    }`}
                                   >
-                                    <Eye className="w-3 h-3 text-zinc-400" />
-                                    {tf.split('/').pop()}
-                                  </button>
-                                ))}
+                                    {subtask.status.toUpperCase()}
+                                  </span>
+                                )}
+                              </div>
+
+                              {subtask.subtaskDir && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleRevealPath(subtask.subtaskDir!)}
+                                  disabled={revealingPath === subtask.subtaskDir}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium btn-secondary rounded-lg transition-colors cursor-pointer shrink-0"
+                                  title="在文件管理器中定位该子任务的独立产物目录"
+                                >
+                                  <FolderOpen className="w-3 h-3 text-zinc-400" />
+                                  <span>定位子任务目录</span>
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Subtask Videos */}
+                            {subtask.videoFiles.length > 0 && (
+                              <div className="space-y-1.5">
+                                <div className="text-[11px] font-bold text-blue-400 flex items-center gap-1.5">
+                                  <Video className="w-3.5 h-3.5" />
+                                  <span>视频产物 ({subtask.videoFiles.length})</span>
+                                </div>
+                                <div className="grid grid-cols-1 gap-2">
+                                  {subtask.videoFiles.map((file, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="flex items-center justify-between p-2.5 bg-zinc-900/90 rounded-lg border border-zinc-800 text-xs hover:border-zinc-700 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2.5 min-w-0 mr-2">
+                                        <div className="w-7 h-7 rounded bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                                          <Video className="w-3.5 h-3.5" />
+                                        </div>
+                                        <div className="min-w-0">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-semibold text-zinc-100 truncate">{file.name}</span>
+                                            <span className="px-1 py-0.2 rounded text-[9px] font-bold bg-zinc-800 text-zinc-300 border border-zinc-700">
+                                              {getFormatBadge(file.ext)}
+                                            </span>
+                                          </div>
+                                          <span className="text-[11px] text-zinc-500 font-mono">
+                                            {formatFileSize(file.size)}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-1.5 shrink-0">
+                                        {file.previewType === 'media' && (
+                                          <button
+                                            type="button"
+                                            onClick={() =>
+                                              setMediaModalState({
+                                                filePath: file.path,
+                                                fileName: file.name,
+                                                fileSize: file.size,
+                                                ext: file.ext,
+                                                mediaType: 'video',
+                                              })
+                                            }
+                                            className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold btn-primary rounded-lg transition-colors cursor-pointer"
+                                            title="在页面中直接播放视频"
+                                          >
+                                            <Play className="w-3 h-3 fill-current" />
+                                            <span>播放</span>
+                                          </button>
+                                        )}
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRevealPath(file.path)}
+                                          disabled={revealingPath === file.path}
+                                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium btn-secondary rounded-lg transition-colors cursor-pointer"
+                                          title="在系统文件管理器中显示并定位此文件"
+                                        >
+                                          <FolderOpen className="w-3 h-3 text-zinc-400" />
+                                          <span>定位</span>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDownloadFile(file.path, file.name)}
+                                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium btn-secondary rounded-lg transition-colors cursor-pointer"
+                                          title="下载此文件"
+                                        >
+                                          <Download className="w-3 h-3 text-zinc-400" />
+                                          <span>下载</span>
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
                               </div>
                             )}
 
-                            {item.error && (
-                              <span className="text-[11px] text-red-400 font-mono">
-                                错误: {item.error}
-                              </span>
+                            {/* Subtask Transcripts & Subtitles */}
+                            {subtask.transcriptFiles.length > 0 && (
+                              <div className="space-y-1.5">
+                                <div className="text-[11px] font-bold text-amber-400 flex items-center gap-1.5">
+                                  <FileText className="w-3.5 h-3.5" />
+                                  <span>转写与字幕产物 ({subtask.transcriptFiles.length})</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {subtask.transcriptFiles.map((file, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="flex items-center justify-between p-2.5 bg-zinc-900/90 rounded-lg border border-zinc-800 text-xs hover:border-zinc-700 transition-colors"
+                                    >
+                                      <div className="flex items-center gap-2 min-w-0 mr-2">
+                                        <FileText className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+                                        <div className="min-w-0">
+                                          <span className="font-semibold text-zinc-100 truncate block">{file.name}</span>
+                                          <span className="text-[10px] text-zinc-500 font-mono">
+                                            {getFormatBadge(file.ext)} • {formatFileSize(file.size)}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setTextModalState({
+                                              filePath: file.path,
+                                              fileName: file.name,
+                                              ext: file.ext,
+                                            })
+                                          }
+                                          className="inline-flex items-center gap-1 px-2 py-1 text-xs font-semibold btn-secondary rounded-lg transition-colors cursor-pointer"
+                                          title="在网页中预览文本与字幕内容"
+                                        >
+                                          <Eye className="w-3 h-3 text-zinc-300" />
+                                          <span>预览</span>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleRevealPath(file.path)}
+                                          disabled={revealingPath === file.path}
+                                          className="p-1 text-zinc-400 hover:text-zinc-200 btn-secondary rounded-lg transition-colors cursor-pointer"
+                                          title="在文件夹中显示"
+                                        >
+                                          <FolderOpen className="w-3.5 h-3.5" />
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={() => handleDownloadFile(file.path, file.name)}
+                                          className="p-1 text-zinc-400 hover:text-zinc-200 btn-secondary rounded-lg transition-colors cursor-pointer"
+                                          title="下载文件"
+                                        >
+                                          <Download className="w-3.5 h-3.5" />
+                                        </button>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Subtask Data or other files if any */}
+                            {subtask.dataFiles.length > 0 && (
+                              <div className="space-y-1.5">
+                                <div className="text-[11px] font-bold text-zinc-400 flex items-center gap-1.5">
+                                  <Database className="w-3.5 h-3.5" />
+                                  <span>任务状态与数据 ({subtask.dataFiles.length})</span>
+                                </div>
+                                <div className="flex flex-wrap gap-2">
+                                  {subtask.dataFiles.map((file, idx) => (
+                                    <div
+                                      key={idx}
+                                      className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-zinc-900 rounded-lg border border-zinc-800 text-xs font-mono"
+                                    >
+                                      <span className="text-zinc-300">{file.name}</span>
+                                      <span className="text-[10px] text-zinc-500">({formatFileSize(file.size)})</span>
+                                      <button
+                                        type="button"
+                                        onClick={() =>
+                                          setTextModalState({
+                                            filePath: file.path,
+                                            fileName: file.name,
+                                            ext: file.ext,
+                                          })
+                                        }
+                                        className="text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                                        title="查看 JSON/数据"
+                                      >
+                                        <Eye className="w-3 h-3" />
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleRevealPath(file.path)}
+                                        className="text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                                        title="在文件夹中显示"
+                                      >
+                                        <FolderOpen className="w-3 h-3" />
+                                      </button>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
                             )}
                           </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                        ))}
 
-                {/* Output Files Explorer for Download / Transcribe jobs */}
-                {activeJobDetails.kind !== 'pipeline' &&
-                  (activeJobDetails as any).outputFiles &&
-                  (activeJobDetails as any).outputFiles.length > 0 && (
-                    <div className="space-y-2 pt-2 border-t border-zinc-800">
-                      <h4 className="text-xs font-bold text-zinc-300 uppercase tracking-wider">
-                        输出产物文件 (点击快速预览)
-                      </h4>
-                      <div className="flex flex-wrap gap-2">
-                        {(activeJobDetails as any).outputFiles.map((file: any, i: number) => {
-                          const isTranscript = ['.txt', '.srt', '.vtt', '.json', '.csv', '.lrc', '.wts'].includes(
-                            file.ext
-                          );
-                          return (
-                            <button
-                              key={i}
-                              type="button"
-                              onClick={() => isTranscript && onPreviewFile(file.path)}
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-mono transition-colors ${
-                                isTranscript
-                                  ? 'bg-zinc-900 hover:bg-zinc-800 border-zinc-700 text-zinc-100 cursor-pointer'
-                                  : 'bg-zinc-950 border-zinc-800 text-zinc-400'
-                              }`}
-                            >
-                              <FileText className="w-3.5 h-3.5 text-zinc-400" />
-                              <span>{file.name}</span>
-                              <span className="text-[10px] text-zinc-500">
-                                ({(file.size / 1024).toFixed(1)} KB)
-                              </span>
-                            </button>
-                          );
-                        })}
+                        {/* Root Pipeline Metadata (batch.json, etc.) */}
+                        {pipelineData.rootMetadataFiles.length > 0 && (
+                          <div className="p-3 bg-zinc-950/60 rounded-xl border border-zinc-800 space-y-2">
+                            <div className="text-[11px] font-bold text-zinc-400 flex items-center gap-1.5">
+                              <Layers className="w-3.5 h-3.5" />
+                              <span>批次全局元数据产物 ({pipelineData.rootMetadataFiles.length})</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {pipelineData.rootMetadataFiles.map((file, idx) => (
+                                <div
+                                  key={idx}
+                                  className="inline-flex items-center gap-2 px-2.5 py-1.5 bg-zinc-900 rounded-lg border border-zinc-800 text-xs font-mono"
+                                >
+                                  <FileCode className="w-3.5 h-3.5 text-zinc-400" />
+                                  <span className="text-zinc-200 font-semibold">{file.name}</span>
+                                  <span className="text-[10px] text-zinc-500">({formatFileSize(file.size)})</span>
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      setTextModalState({
+                                        filePath: file.path,
+                                        fileName: file.name,
+                                        ext: file.ext,
+                                      })
+                                    }
+                                    className="p-1 hover:text-zinc-100 text-zinc-400 cursor-pointer"
+                                    title="预览元数据"
+                                  >
+                                    <Eye className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevealPath(file.path)}
+                                    className="p-1 hover:text-zinc-100 text-zinc-400 cursor-pointer"
+                                    title="在文件夹中显示"
+                                  >
+                                    <FolderOpen className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadFile(file.path, file.name)}
+                                    className="p-1 hover:text-zinc-100 text-zinc-400 cursor-pointer"
+                                    title="下载文件"
+                                  >
+                                    <Download className="w-3 h-3" />
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
+
+                  {/* Regular Jobs: Download / Transcribe / Model-Download */}
+                  {activeJobDetails.kind !== 'pipeline' && activeJobDetails.outputFiles && activeJobDetails.outputFiles.length > 0 && (() => {
+                    const grouped = groupOutputFiles(activeJobDetails.outputFiles);
+
+                    const renderCategorySection = (
+                      title: string,
+                      icon: React.ReactNode,
+                      files: JobOutputFile[],
+                      themeColor: string
+                    ) => {
+                      if (files.length === 0) return null;
+                      return (
+                        <div className="space-y-2">
+                          <div className={`text-xs font-bold ${themeColor} flex items-center gap-1.5`}>
+                            {icon}
+                            <span>{title} ({files.length})</span>
+                          </div>
+
+                          <div className="grid grid-cols-1 gap-2">
+                            {files.map((file, idx) => (
+                              <div
+                                key={idx}
+                                className="flex items-center justify-between p-3 bg-zinc-950/80 rounded-xl border border-zinc-800/90 text-xs hover:border-zinc-700 transition-colors"
+                              >
+                                <div className="flex items-center gap-3 min-w-0 mr-3">
+                                  <div className="w-8 h-8 rounded-lg bg-zinc-900 border border-zinc-700 flex items-center justify-center text-zinc-200 shrink-0 shadow-xs">
+                                    {file.category === 'video' ? (
+                                      <Video className="w-4 h-4 text-blue-400" />
+                                    ) : file.category === 'audio' ? (
+                                      <Music className="w-4 h-4 text-purple-400" />
+                                    ) : file.category === 'text' ? (
+                                      <FileText className="w-4 h-4 text-amber-400" />
+                                    ) : file.category === 'data' ? (
+                                      <Database className="w-4 h-4 text-cyan-400" />
+                                    ) : (
+                                      <Package className="w-4 h-4 text-zinc-400" />
+                                    )}
+                                  </div>
+
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-semibold text-zinc-100 truncate">{file.name}</span>
+                                      <span className="px-1.5 py-0.5 text-[10px] font-bold rounded bg-zinc-800 text-zinc-300 border border-zinc-700">
+                                        {getFormatBadge(file.ext)}
+                                      </span>
+                                    </div>
+                                    <p className="text-[11px] text-zinc-400 font-mono truncate" title={file.path}>
+                                      {formatFileSize(file.size)} {file.relativePath !== file.name && `• ${file.relativePath}`}
+                                    </p>
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {file.previewType === 'media' && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setMediaModalState({
+                                          filePath: file.path,
+                                          fileName: file.name,
+                                          fileSize: file.size,
+                                          ext: file.ext,
+                                          mediaType: file.category === 'audio' ? 'audio' : 'video',
+                                        })
+                                      }
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold btn-primary rounded-lg transition-colors cursor-pointer shadow-xs active:scale-[0.98]"
+                                      title="在页面内播放媒体文件"
+                                    >
+                                      <Play className="w-3.5 h-3.5 fill-current" />
+                                      <span>播放</span>
+                                    </button>
+                                  )}
+
+                                  {file.previewType === 'text' && (
+                                    <button
+                                      type="button"
+                                      onClick={() =>
+                                        setTextModalState({
+                                          filePath: file.path,
+                                          fileName: file.name,
+                                          ext: file.ext,
+                                        })
+                                      }
+                                      className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium btn-secondary rounded-lg transition-colors cursor-pointer active:scale-[0.98]"
+                                      title="在网页中预览内容并复制全文"
+                                    >
+                                      <Eye className="w-3.5 h-3.5 text-zinc-300" />
+                                      <span>预览</span>
+                                    </button>
+                                  )}
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRevealPath(file.path)}
+                                    disabled={revealingPath === file.path}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium btn-secondary rounded-lg transition-colors cursor-pointer active:scale-[0.98]"
+                                    title="在系统 Finder 或文件资源管理器中显示并定位此文件"
+                                  >
+                                    <FolderOpen className="w-3.5 h-3.5 text-zinc-400" />
+                                    <span>定位</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadFile(file.path, file.name)}
+                                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium btn-secondary rounded-lg transition-colors cursor-pointer active:scale-[0.98]"
+                                    title="下载此文件"
+                                  >
+                                    <Download className="w-3.5 h-3.5 text-zinc-400" />
+                                    <span>下载</span>
+                                  </button>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    };
+
+                    return (
+                      <div className="space-y-4">
+                        {renderCategorySection('视频文件', <Video className="w-4 h-4 text-blue-400" />, grouped.video, 'text-blue-400')}
+                        {renderCategorySection('音频文件', <Music className="w-4 h-4 text-purple-400" />, grouped.audio, 'text-purple-400')}
+                        {renderCategorySection('文本与字幕', <FileText className="w-4 h-4 text-amber-400" />, grouped.text, 'text-amber-400')}
+                        {renderCategorySection('结构化数据', <Database className="w-4 h-4 text-cyan-400" />, grouped.data, 'text-cyan-400')}
+                        {renderCategorySection('其他产物', <Package className="w-4 h-4 text-zinc-400" />, grouped.other, 'text-zinc-400')}
+                      </div>
+                    );
+                  })()}
+                </div>
               </div>
 
               {/* Real-time SSE Logs Terminal Card */}
@@ -1018,6 +1432,28 @@ export const JobCenterView: React.FC<JobCenterViewProps> = ({
         cancelText="取消"
         variant={isDeletingRunningJob ? 'danger' : 'danger'}
         isLoading={isDeleting}
+      />
+
+      {/* Media Playback Modal (Video & Audio) */}
+      <MediaPreviewModal
+        isOpen={Boolean(mediaModalState)}
+        onClose={() => setMediaModalState(null)}
+        filePath={mediaModalState?.filePath || ''}
+        fileName={mediaModalState?.fileName}
+        fileSize={mediaModalState?.fileSize}
+        ext={mediaModalState?.ext}
+        mediaType={mediaModalState?.mediaType || 'video'}
+        onShowToast={onShowToast}
+      />
+
+      {/* Text / Subtitle / Data Preview Modal */}
+      <FileTextPreviewModal
+        isOpen={Boolean(textModalState)}
+        onClose={() => setTextModalState(null)}
+        filePath={textModalState?.filePath || ''}
+        fileName={textModalState?.fileName}
+        ext={textModalState?.ext}
+        onShowToast={onShowToast}
       />
     </div>
   );

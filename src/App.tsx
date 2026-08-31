@@ -359,10 +359,12 @@ export default function App() {
         onShowToast={showToast}
       />
 
-      {/* Transcript Preview Modal */}
+      {/* File Text / Subtitle Preview Modal */}
       <TranscriptPreviewModal
+        isOpen={Boolean(previewFilePath)}
         filePath={previewFilePath}
         onClose={() => setPreviewFilePath(null)}
+        onShowToast={showToast}
       />
     </div>
   );

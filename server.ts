@@ -391,6 +391,78 @@ function openDirectoryInFileManager(directory: string) {
   }
 }
 
+function revealInFileManager(targetPath: string) {
+  if (!fs.existsSync(targetPath)) {
+    throw new Error('指定的文件或目录不存在。');
+  }
+  const isFile = fs.statSync(targetPath).isFile();
+  if (process.platform === 'darwin') {
+    const args = isFile ? ['-R', targetPath] : [targetPath];
+    const result = spawnSync('open', args, { encoding: 'utf8', timeout: 10_000, windowsHide: true });
+    if (result.error || result.status !== 0) {
+      const parent = path.dirname(targetPath);
+      spawnSync('open', [parent], { encoding: 'utf8', timeout: 10_000, windowsHide: true });
+    }
+  } else if (process.platform === 'win32') {
+    const args = isFile ? [`/select,${targetPath}`] : [targetPath];
+    const result = spawnSync('explorer.exe', args, { encoding: 'utf8', timeout: 10_000, windowsHide: true });
+    if (result.error || result.status !== 0) {
+      const parent = path.dirname(targetPath);
+      spawnSync('explorer.exe', [parent], { encoding: 'utf8', timeout: 10_000, windowsHide: true });
+    }
+  } else {
+    const dirToOpen = isFile ? path.dirname(targetPath) : targetPath;
+    const result = spawnSync('xdg-open', [dirToOpen], { encoding: 'utf8', timeout: 10_000, windowsHide: true });
+    if (result.error || result.status !== 0) {
+      throw new Error(`无法在文件管理器中打开：${result.error?.message || String(result.stderr ?? '').trim() || '未知错误'}`);
+    }
+  }
+}
+
+const VIDEO_MEDIA_EXTS = new Set(['.mp4', '.webm', '.m4v', '.mov']);
+const VIDEO_OTHER_EXTS = new Set(['.mkv', '.avi', '.flv', '.ts', '.wmv', '.3gp', '.m4p', '.mpg', '.mpeg', '.vob']);
+const AUDIO_MEDIA_EXTS = new Set(['.mp3', '.m4a', '.aac', '.wav', '.ogg']);
+const AUDIO_OTHER_EXTS = new Set(['.flac', '.opus', '.wma', '.alac', '.aiff', '.ape']);
+const TEXT_EXTS = new Set(['.txt', '.srt', '.vtt', '.lrc', '.wts', '.log', '.md']);
+const DATA_EXTS = new Set(['.json', '.csv', '.tsv', '.xml', '.yaml', '.yml']);
+
+const MEDIA_MIME_TYPES: Record<string, string> = {
+  '.mp4': 'video/mp4',
+  '.webm': 'video/webm',
+  '.m4v': 'video/x-m4v',
+  '.mov': 'video/quicktime',
+  '.mp3': 'audio/mpeg',
+  '.m4a': 'audio/mp4',
+  '.aac': 'audio/aac',
+  '.wav': 'audio/wav',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/opus',
+  '.flac': 'audio/flac',
+};
+
+function classifyOutputFile(ext: string): { category: 'video' | 'audio' | 'text' | 'data' | 'other'; previewType: 'text' | 'media' | 'none' } {
+  const lower = (ext || '').toLowerCase();
+  if (VIDEO_MEDIA_EXTS.has(lower)) {
+    return { category: 'video', previewType: 'media' };
+  }
+  if (VIDEO_OTHER_EXTS.has(lower)) {
+    return { category: 'video', previewType: 'none' };
+  }
+  if (AUDIO_MEDIA_EXTS.has(lower)) {
+    return { category: 'audio', previewType: 'media' };
+  }
+  if (AUDIO_OTHER_EXTS.has(lower)) {
+    return { category: 'audio', previewType: 'none' };
+  }
+  if (TEXT_EXTS.has(lower)) {
+    return { category: 'text', previewType: 'text' };
+  }
+  if (DATA_EXTS.has(lower)) {
+    return { category: 'data', previewType: 'text' };
+  }
+  return { category: 'other', previewType: 'none' };
+}
+
 function isSafeJobId(jobId: string) {
   return /^[A-Za-z0-9_-]+$/u.test(jobId);
 }
@@ -1003,21 +1075,68 @@ app.get('/api/jobs/:id', (req, res) => {
   }
 
   // Also collect output directory preview files if existing
-  let outputFiles: Array<{ name: string; size: number; path: string; ext: string }> = [];
+  let outputFiles: Array<{
+    name: string;
+    path: string;
+    relativePath: string;
+    size: number;
+    ext: string;
+    category: 'video' | 'audio' | 'text' | 'data' | 'other';
+    previewType: 'text' | 'media' | 'none';
+    parentDirectory: string;
+    pipelineTaskId?: string;
+    pipelineTaskTitle?: string;
+  }> = [];
+
   if (job.outputDir && fs.existsSync(job.outputDir)) {
     try {
-      const findFilesRecursive = (dir: string): Array<{ name: string; size: number; path: string; ext: string }> => {
+      const taskTitleMap = new Map<string, string>();
+      if (job.pipelineBatch?.items) {
+        for (const item of job.pipelineBatch.items) {
+          taskTitleMap.set(item.id, item.url || item.id);
+        }
+      }
+
+      const findFilesRecursive = (dir: string): typeof outputFiles => {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
-        const list: Array<{ name: string; size: number; path: string; ext: string }> = [];
+        const list: typeof outputFiles = [];
         for (const entry of entries) {
           const fullPath = path.join(dir, entry.name);
           if (entry.isFile()) {
             const stat = fs.statSync(fullPath);
+            const ext = path.extname(entry.name).toLowerCase();
+            const relativePath = path.relative(job.outputDir!, fullPath).replace(/\\/g, '/');
+            const { category, previewType } = classifyOutputFile(ext);
+
+            let pipelineTaskId: string | undefined;
+            let pipelineTaskTitle: string | undefined;
+            const match = relativePath.match(/^items\/([^/]+)/);
+            if (match) {
+              pipelineTaskId = match[1];
+              pipelineTaskTitle = taskTitleMap.get(pipelineTaskId);
+              if (!pipelineTaskTitle) {
+                const subTaskJsonPath = path.join(job.outputDir!, 'items', pipelineTaskId, 'task.json');
+                if (fs.existsSync(subTaskJsonPath)) {
+                  try {
+                    const subData = JSON.parse(fs.readFileSync(subTaskJsonPath, 'utf8'));
+                    pipelineTaskTitle = subData.url || subData.id || pipelineTaskId;
+                    taskTitleMap.set(pipelineTaskId, pipelineTaskTitle);
+                  } catch {}
+                }
+              }
+            }
+
             list.push({
-              name: path.relative(job.outputDir!, fullPath),
-              size: stat.size,
+              name: entry.name,
               path: fullPath,
-              ext: path.extname(entry.name).toLowerCase(),
+              relativePath,
+              size: stat.size,
+              ext,
+              category,
+              previewType,
+              parentDirectory: path.dirname(fullPath),
+              pipelineTaskId,
+              pipelineTaskTitle,
             });
           } else if (entry.isDirectory()) {
             list.push(...findFilesRecursive(fullPath));
@@ -1083,18 +1202,130 @@ app.get('/api/files/read', (req, res) => {
     }
 
     if (stat.size > 10 * 1024 * 1024) {
-      return res.status(400).json({ error: '文件过大，无法在网页中直接预览' });
+      return res.status(400).json({ error: '文件过大（超过 10MB），无法在网页中直接预览' });
     }
 
+    const ext = path.extname(resolved).toLowerCase();
     const content = fs.readFileSync(resolved, 'utf8');
     res.json({
       path: resolved,
       fileName: path.basename(resolved),
       size: stat.size,
+      ext,
       content,
     });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// 11. POST /api/files/reveal (Reveal file or folder in OS Native File Manager)
+app.post('/api/files/reveal', (req, res) => {
+  const targetPath = req.body?.path as string;
+  if (!targetPath || typeof targetPath !== 'string') {
+    return res.status(400).json({ error: '请提供有效的文件或目录路径。' });
+  }
+
+  const resolved = resolvePath(targetPath);
+  if (!fs.existsSync(resolved)) {
+    return res.status(404).json({ error: '文件或目录不存在。' });
+  }
+
+  try {
+    revealInFileManager(resolved);
+    res.json({
+      success: true,
+      path: resolved,
+      parentDirectory: path.dirname(resolved),
+    });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message || '无法在文件管理器中定位。' });
+  }
+});
+
+// 12. GET /api/files/download (Direct file download)
+app.get('/api/files/download', (req, res) => {
+  const filePath = req.query.path as string;
+  if (!filePath || typeof filePath !== 'string') {
+    return res.status(400).json({ error: 'Missing path parameter' });
+  }
+
+  const resolved = resolvePath(filePath);
+  if (!fs.existsSync(resolved)) {
+    return res.status(404).json({ error: '文件不存在。' });
+  }
+
+  const stat = fs.statSync(resolved);
+  if (!stat.isFile()) {
+    return res.status(400).json({ error: '指定路径不是文件。' });
+  }
+
+  const fileName = path.basename(resolved);
+  res.download(resolved, fileName, (err) => {
+    if (err && !res.headersSent) {
+      res.status(500).json({ error: `下载失败: ${err.message}` });
+    }
+  });
+});
+
+// 13. GET /api/files/media (Media streaming with HTTP Range support)
+app.get('/api/files/media', (req, res) => {
+  const filePath = req.query.path as string;
+  if (!filePath || typeof filePath !== 'string') {
+    return res.status(400).json({ error: 'Missing path parameter' });
+  }
+
+  const resolved = resolvePath(filePath);
+  if (!fs.existsSync(resolved)) {
+    return res.status(404).json({ error: '媒体文件不存在。' });
+  }
+
+  try {
+    const stat = fs.statSync(resolved);
+    if (!stat.isFile()) {
+      return res.status(400).json({ error: '指定路径不是文件。' });
+    }
+
+    const ext = path.extname(resolved).toLowerCase();
+    const contentType = MEDIA_MIME_TYPES[ext] || 'application/octet-stream';
+    const fileSize = stat.size;
+    const range = req.headers.range;
+
+    if (range) {
+      const parts = range.replace(/bytes=/, '').split('-');
+      const start = parseInt(parts[0], 10);
+      const end = parts[1] ? parseInt(parts[1], 10) : fileSize - 1;
+
+      if (isNaN(start) || start >= fileSize || end < start) {
+        res.status(416).setHeader('Content-Range', `bytes */${fileSize}`);
+        return res.end();
+      }
+
+      const safeEnd = Math.min(end, fileSize - 1);
+      const chunkSize = safeEnd - start + 1;
+      const fileStream = fs.createReadStream(resolved, { start, end: safeEnd });
+
+      res.writeHead(206, {
+        'Content-Range': `bytes ${start}-${safeEnd}/${fileSize}`,
+        'Accept-Ranges': 'bytes',
+        'Content-Length': chunkSize,
+        'Content-Type': contentType,
+      });
+
+      fileStream.pipe(res);
+    } else {
+      res.writeHead(200, {
+        'Content-Length': fileSize,
+        'Accept-Ranges': 'bytes',
+        'Content-Type': contentType,
+      });
+
+      fs.createReadStream(resolved).pipe(res);
+    }
+  } catch (err: any) {
+    if (!res.headersSent) {
+      res.status(500).json({ error: `无法读取媒体文件: ${err.message}` });
+    }
   }
 });
 

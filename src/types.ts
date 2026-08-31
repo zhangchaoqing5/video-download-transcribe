@@ -35,6 +35,19 @@ export interface PipelineBatchData {
   items: PipelineTaskItem[];
 }
 
+export interface JobOutputFile {
+  name: string;
+  path: string;
+  relativePath: string;
+  size: number;
+  ext: string;
+  category: 'video' | 'audio' | 'text' | 'data' | 'other';
+  previewType: 'text' | 'media' | 'none';
+  parentDirectory: string;
+  pipelineTaskId?: string;
+  pipelineTaskTitle?: string;
+}
+
 export interface JobRecord {
   id: string;
   kind: JobKind;
@@ -46,6 +59,7 @@ export interface JobRecord {
   logs: string;
   error?: string;
   outputDir?: string;
+  outputFiles?: JobOutputFile[];
   progress?: JobProgressData;
   result?: any;
   pipelineBatch?: PipelineBatchData;
