@@ -74,6 +74,7 @@ export function normalizeTranscribeOptions(raw, cwd = process.cwd()) {
     model: String(raw.model ?? DEFAULT_WHISPER_MODEL),
     modelDir: path.resolve(cwd, String(raw.modelDir ?? DEFAULT_WHISPER_MODEL_DIR)),
     output: path.resolve(cwd, String(raw.output ?? 'transcripts')),
+    outputStem: raw.outputStem ? String(raw.outputStem) : undefined,
     whisperCli: String(raw.whisperCli ?? process.env.WHISPER_CLI_PATH ?? 'whisper-cli'),
     ffmpeg: String(raw.ffmpeg ?? process.env.FFMPEG_PATH ?? 'ffmpeg'),
     formats: normalizeFormats(raw.formats),
@@ -156,7 +157,7 @@ export async function transcribeMedia(raw) {
     for (let index = 0; index < mediaFiles.length; index += 1) {
       const mediaFile = mediaFiles[index];
       const stem = path.basename(mediaFile, path.extname(mediaFile));
-      const outputBase = path.join(options.output, stem);
+      const outputBase = path.join(options.output, options.outputStem ?? stem);
       const firstExtension = TRANSCRIPT_FORMATS.get(options.formats[0])?.extension;
       if (!options.overwrite && firstExtension && await exists(`${outputBase}.${firstExtension}`)) {
         logger.log(`跳过已存在的输出：${outputBase}.${firstExtension}`);

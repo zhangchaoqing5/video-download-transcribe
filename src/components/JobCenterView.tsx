@@ -953,8 +953,30 @@ export const JobCenterView: React.FC<JobCenterViewProps> = ({
                     </div>
                   )}
 
+                  {activeJobDetails.artifactManifest?.tasks?.length ? (
+                    <div className="space-y-3">
+                      {activeJobDetails.artifactManifest.tasks.map((task) => {
+                        const files = (activeJobDetails.outputFiles || []).filter((file) =>
+                          task.artifacts?.some((artifact) => file.relativePath === artifact.path)
+                        );
+                        const source = task.url || task.input;
+                        return <div key={task.id} className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/70 space-y-3">
+                          <div className="min-w-0"><h5 className="font-semibold text-zinc-100 truncate">{task.title || task.url || task.input || task.id}</h5>
+                            {source && (task.url ? <a href={task.url} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:underline truncate block">来源：{task.url}</a> : <div className="flex items-center gap-2"><p className="text-xs text-zinc-400 truncate">本地文件：{task.input}</p><button onClick={() => handleRevealPath(task.input!)} className="shrink-0 text-xs text-zinc-300 hover:text-white">定位来源</button></div>)}</div>
+                          {activeJobDetails.outputDir && <button onClick={() => handleRevealPath(`${activeJobDetails.outputDir}/${task.id}`)} className="text-xs text-zinc-300 hover:text-white">打开此任务目录</button>}
+                          <div className="flex flex-wrap gap-2">{files.map((file) => <div key={file.path} className="inline-flex items-center gap-2 px-2 py-1 rounded border border-zinc-800 text-xs">
+                            <span className="text-zinc-300">{getFormatBadge(file.ext)}</span>
+                            {file.previewType === 'media' && <button onClick={() => setMediaModalState({ filePath: file.path, fileName: task.title, fileSize: file.size, ext: file.ext, mediaType: file.category === 'audio' ? 'audio' : 'video' })} className="text-blue-400">播放</button>}
+                            {file.previewType === 'text' && <button onClick={() => setTextModalState({ filePath: file.path, fileName: task.title, ext: file.ext })} className="text-amber-400">预览</button>}
+                            <button onClick={() => handleRevealPath(file.path)} className="text-zinc-300">定位</button><button onClick={() => handleDownloadFile(file.path, file.name)} className="text-zinc-300">下载</button>
+                          </div>)}</div>
+                        </div>;
+                      })}
+                    </div>
+                  ) : null}
+
                   {/* Pipeline tasks: grouped by subtask item */}
-                  {activeJobDetails.kind === 'pipeline' && activeJobDetails.outputFiles && activeJobDetails.outputFiles.length > 0 && (() => {
+                  {!activeJobDetails.artifactManifest?.tasks?.length && activeJobDetails.kind === 'pipeline' && activeJobDetails.outputFiles && activeJobDetails.outputFiles.length > 0 && (() => {
                     const pipelineData = groupPipelineOutputFiles(activeJobDetails.outputFiles, activeJobDetails.pipelineBatch);
                     return (
                       <div className="space-y-4">
@@ -1247,7 +1269,7 @@ export const JobCenterView: React.FC<JobCenterViewProps> = ({
                   })()}
 
                   {/* Regular Jobs: Download / Transcribe / Model-Download */}
-                  {activeJobDetails.kind !== 'pipeline' && activeJobDetails.outputFiles && activeJobDetails.outputFiles.length > 0 && (() => {
+                  {!activeJobDetails.artifactManifest?.tasks?.length && activeJobDetails.kind !== 'pipeline' && activeJobDetails.outputFiles && activeJobDetails.outputFiles.length > 0 && (() => {
                     const grouped = groupOutputFiles(activeJobDetails.outputFiles);
 
                     const renderCategorySection = (

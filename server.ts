@@ -2,6 +2,7 @@ import express from 'express';
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+import { randomUUID } from 'crypto';
 import { spawn, spawnSync } from 'child_process';
 import { createServer as createViteServer } from 'vite';
 import {
@@ -467,6 +468,20 @@ function isSafeJobId(jobId: string) {
   return /^[A-Za-z0-9_-]+$/u.test(jobId);
 }
 
+const LOCAL_MEDIA_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.mp3', '.m4a', '.wav', '.flac', '.ogg', '.opus', '.aac']);
+function collectLocalMedia(input: string, recursive: boolean): string[] {
+  const stat = fs.statSync(input);
+  if (stat.isFile()) return LOCAL_MEDIA_EXTENSIONS.has(path.extname(input).toLowerCase()) ? [input] : [];
+  if (!stat.isDirectory()) return [];
+  const result: string[] = [];
+  for (const entry of fs.readdirSync(input, { withFileTypes: true })) {
+    const target = path.join(input, entry.name);
+    if (entry.isFile() && LOCAL_MEDIA_EXTENSIONS.has(path.extname(entry.name).toLowerCase())) result.push(target);
+    if (recursive && entry.isDirectory() && !entry.name.startsWith('.')) result.push(...collectLocalMedia(target, true));
+  }
+  return result;
+}
+
 // Sequential queue for model download jobs to prevent concurrent duplicate model download
 const modelDownloadQueue: Array<() => Promise<void>> = [];
 let isDownloadingModel = false;
@@ -713,7 +728,10 @@ app.post('/api/jobs/download', async (req, res) => {
 
   const jobId = `job_dl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   const sanitized = sanitizeJobParams({ ...options, urls: validUrls });
-  const outputDir = resolvePath(options.output || 'output');
+  const outputRoot = resolvePath(options.output || 'output');
+  const outputDir = path.join(outputRoot, jobId);
+  const taskEntries = validUrls.map((url) => ({ id: `t_${randomUUID().replace(/-/g, '').slice(0, 12)}`, url, title: '', artifacts: [] as any[] }));
+  fs.mkdirSync(outputDir, { recursive: true });
 
   const job: JobRecord = {
     id: jobId,
@@ -723,7 +741,9 @@ app.post('/api/jobs/download', async (req, res) => {
     params: sanitized,
     logs: '',
     outputDir,
+    result: { schemaVersion: 1, tasks: taskEntries },
   };
+  fs.writeFileSync(path.join(outputDir, 'job.json'), JSON.stringify({ id: jobId, kind: 'download', tasks: taskEntries }, null, 2));
 
   saveJobToDisk(job);
   res.json({ jobId, message: '视频下载任务已创建', job });
@@ -737,16 +757,19 @@ app.post('/api/jobs/download', async (req, res) => {
     broadcastJobEvent(job.id, 'status', { status: 'running' });
 
     try {
-      const result = await downloadUrls({
-        ...options,
-        urls: validUrls,
-        output: outputDir,
-        cookiesFile: options.cookiesFile ? resolvePath(options.cookiesFile) : undefined,
-        remoteEjs: normalizeRemoteEjs(options.remoteEjs),
-        onOutput: (stream, chunk) => {
-          appendJobLog(job, stream, chunk);
-        },
-      });
+      const results = [] as any[];
+      for (const task of taskEntries) {
+        const taskDir = path.join(outputDir, task.id);
+        fs.mkdirSync(taskDir, { recursive: true });
+        const result = await downloadUrls({ ...options, urls: [task.url], output: taskDir, outputTemplate: path.join(taskDir, `${task.id}.%(ext)s`), writeInfoJson: true, cookiesFile: options.cookiesFile ? resolvePath(options.cookiesFile) : undefined, remoteEjs: normalizeRemoteEjs(options.remoteEjs), onOutput: (stream, chunk) => appendJobLog(job, stream, chunk) });
+        const taskFiles = fs.readdirSync(taskDir).filter((file) => !file.startsWith('.'));
+        const infoFile = taskFiles.find((file) => file.endsWith('.info.json'));
+        if (infoFile) try { task.title = JSON.parse(fs.readFileSync(path.join(taskDir, infoFile), 'utf8')).title; } catch {}
+        task.artifacts = taskFiles.filter((file) => !file.endsWith('.info.json')).map((file) => ({ path: path.join(task.id, file), kind: 'video' }));
+        results.push(...result.results);
+        fs.writeFileSync(path.join(outputDir, 'job.json'), JSON.stringify({ id: jobId, kind: 'download', tasks: taskEntries }, null, 2));
+      }
+      const result = { results };
 
       const failedItem = result.results?.find((r) => !r.ok);
       if (failedItem) {
@@ -851,8 +874,13 @@ app.post('/api/jobs/transcribe', async (req, res) => {
     return res.status(400).json({ error: '请提供至少一个有效的媒体文件或文件夹路径' });
   }
 
-  const outputDir = resolvePath(options.output || 'transcripts');
   const jobId = `job_tr_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const outputRoot = resolvePath(options.output || 'transcripts');
+  const outputDir = path.join(outputRoot, jobId);
+  const mediaInputs = validInputs.map(resolvePath).flatMap((input) => collectLocalMedia(input, Boolean(options.recursive)));
+  if (mediaInputs.length === 0) return res.status(400).json({ error: '未找到可转写的媒体文件' });
+  const taskEntries = mediaInputs.map((input) => ({ id: `t_${randomUUID().replace(/-/g, '').slice(0, 12)}`, input, title: path.basename(input, path.extname(input)), artifacts: [] as any[] }));
+  fs.mkdirSync(outputDir, { recursive: true });
   const sanitized = sanitizeJobParams({ ...options, inputs: validInputs, output: outputDir });
 
   const job: JobRecord = {
@@ -863,7 +891,9 @@ app.post('/api/jobs/transcribe', async (req, res) => {
     params: sanitized,
     logs: '',
     outputDir,
+    result: { schemaVersion: 1, tasks: taskEntries },
   };
+  fs.writeFileSync(path.join(outputDir, 'job.json'), JSON.stringify({ id: jobId, kind: 'transcribe', tasks: taskEntries }, null, 2));
 
   saveJobToDisk(job);
   res.json({ jobId, message: '媒体转写任务已创建', job });
@@ -877,17 +907,16 @@ app.post('/api/jobs/transcribe', async (req, res) => {
     broadcastJobEvent(job.id, 'status', { status: 'running' });
 
     try {
-      const result = await transcribeMedia({
-        ...options,
-        inputs: validInputs.map(resolvePath),
-        output: outputDir,
-        modelDir: options.modelDir ? resolvePath(options.modelDir) : undefined,
-        vadModel: options.vadModel ? resolvePath(options.vadModel) : undefined,
-        logger: {
-          log: (...args: any[]) => appendJobLog(job, 'stdout', args.join(' ') + '\n'),
-        },
-        onProgress: (progress) => updateTranscriptionProgress(job, progress),
-      });
+      const results: any[] = [];
+      for (const task of taskEntries) {
+        const taskDir = path.join(outputDir, task.id);
+        fs.mkdirSync(taskDir, { recursive: true });
+        const result = await transcribeMedia({ ...options, inputs: [task.input], output: taskDir, outputStem: task.id, modelDir: options.modelDir ? resolvePath(options.modelDir) : undefined, vadModel: options.vadModel ? resolvePath(options.vadModel) : undefined, logger: { log: (...args: any[]) => appendJobLog(job, 'stdout', args.join(' ') + '\n') }, onProgress: (progress) => updateTranscriptionProgress(job, progress) });
+        task.artifacts = fs.readdirSync(taskDir).filter((file) => !file.startsWith('.')).map((file) => ({ path: path.join(task.id, file), kind: 'transcript' }));
+        results.push(...result.results);
+        fs.writeFileSync(path.join(outputDir, 'job.json'), JSON.stringify({ id: jobId, kind: 'transcribe', tasks: taskEntries }, null, 2));
+      }
+      const result = { results };
 
       job.status = 'complete';
       job.result = result;
@@ -921,6 +950,13 @@ app.post('/api/jobs/pipeline', async (req, res) => {
   const runRoot = resolvePath(options.runRoot || 'pipeline');
   const jobId = `job_pl_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
   const sanitized = sanitizeJobParams({ ...options, urls: validUrls, runRoot });
+  const outputDir = path.join(runRoot, jobId);
+  const taskEntries = validUrls.map((url) => ({
+    id: `t_${randomUUID().replace(/-/g, '').slice(0, 12)}`,
+    url,
+    title: '',
+    artifacts: [] as any[],
+  }));
 
   const job: JobRecord = {
     id: jobId,
@@ -929,9 +965,15 @@ app.post('/api/jobs/pipeline', async (req, res) => {
     createdAt: new Date().toISOString(),
     params: sanitized,
     logs: '',
-    outputDir: runRoot,
+    outputDir,
+    result: { schemaVersion: 1, tasks: taskEntries },
   };
 
+  // The Job directory is the only scope that the result browser may inspect.
+  // The runner is explicitly told this reserved directory is safe to reuse.
+  fs.mkdirSync(runRoot, { recursive: true });
+  fs.mkdirSync(outputDir);
+  fs.writeFileSync(path.join(outputDir, 'job.json'), JSON.stringify({ id: jobId, kind: 'pipeline', tasks: taskEntries }, null, 2), { flag: 'wx' });
   saveJobToDisk(job);
   res.json({ jobId, message: '一键 Pipeline 任务已创建', job });
 
@@ -948,6 +990,9 @@ app.post('/api/jobs/pipeline', async (req, res) => {
         ...options,
         urls: validUrls,
         runRoot,
+        batchId: jobId,
+        taskIds: taskEntries.map((task) => task.id),
+        allowExistingBatchDirectory: true,
         cookiesFile: options.cookiesFile ? resolvePath(options.cookiesFile) : undefined,
         remoteEjs: normalizeRemoteEjs(options.remoteEjs),
         modelDir: options.modelDir ? resolvePath(options.modelDir) : undefined,
@@ -965,6 +1010,13 @@ app.post('/api/jobs/pipeline', async (req, res) => {
       job.status = result.failed && result.failed.length > 0 ? 'failed' : 'complete';
       job.result = result;
       job.outputDir = result.batchDirectory;
+      const tasks = result.items.map((item: any) => ({
+        id: item.id,
+        title: (() => { try { const info = fs.readdirSync(item.directory).find((file) => file.endsWith('.info.json')); return info ? JSON.parse(fs.readFileSync(path.join(item.directory, info), 'utf8')).title : item.url; } catch { return item.url; } })(),
+        url: item.url,
+        artifacts: fs.readdirSync(item.directory).filter((file) => !file.startsWith('.') && !file.endsWith('.info.json')).map((file) => ({ path: path.join(item.id, file), kind: path.extname(file).toLowerCase() === '.mp4' ? 'video' : 'transcript' })),
+      }));
+      fs.writeFileSync(path.join(result.batchDirectory, 'job.json'), JSON.stringify({ id: jobId, kind: 'pipeline', tasks }, null, 2));
 
       if (result.failed && result.failed.length > 0) {
         job.error = `${result.failed.length} 个任务项处理失败`;
@@ -1064,6 +1116,17 @@ app.get('/api/jobs/:id', (req, res) => {
     return res.status(404).json({ error: `未找到任务 ${id}` });
   }
 
+  // Migration for a task that was already running when the Job-scoped output
+  // directory fix landed. The old record pointed at the shared pipeline root;
+  // if its own directory exists, switch before any recursive scan takes place.
+  if (job.kind === 'pipeline' && job.outputDir === job.params?.runRoot) {
+    const scopedDirectory = path.join(job.outputDir, job.id);
+    if (fs.existsSync(scopedDirectory) && fs.statSync(scopedDirectory).isDirectory()) {
+      job.outputDir = scopedDirectory;
+      saveJobToDisk(job);
+    }
+  }
+
   // If pipeline job, reload latest batch.json and task items if available
   if (job.kind === 'pipeline' && job.outputDir) {
     try {
@@ -1072,6 +1135,11 @@ app.get('/api/jobs/:id', (req, res) => {
         job.pipelineBatch = JSON.parse(fs.readFileSync(batchJsonPath, 'utf8'));
       }
     } catch {}
+  }
+
+  let artifactManifest: any;
+  if (job.outputDir) {
+    try { artifactManifest = JSON.parse(fs.readFileSync(path.join(job.outputDir, 'job.json'), 'utf8')); } catch {}
   }
 
   // Also collect output directory preview files if existing
@@ -1103,7 +1171,7 @@ app.get('/api/jobs/:id', (req, res) => {
         for (const entry of entries) {
           // Finder metadata and internal pipeline documents are not user-facing
           // outputs. Their presence must not create phantom result items.
-          if (entry.name.startsWith('.') || entry.name === 'task.json' || entry.name === 'batch.json' || entry.name === 'job.json') continue;
+          if (entry.name.startsWith('.') || entry.name === 'task.json' || entry.name === 'batch.json' || entry.name === 'job.json' || entry.name.endsWith('.info.json')) continue;
           const fullPath = path.join(dir, entry.name);
           if (entry.isFile()) {
             const stat = fs.statSync(fullPath);
@@ -1148,10 +1216,17 @@ app.get('/api/jobs/:id', (req, res) => {
         return list;
       };
       outputFiles = findFilesRecursive(job.outputDir);
+      // New jobs are manifest-driven. Files not yet registered for this Job
+      // must never leak into the result list while a task is running.
+      if (artifactManifest?.tasks) {
+        const allowedPaths = new Set(
+          artifactManifest.tasks.flatMap((task: any) => task.artifacts?.map((artifact: any) => artifact.path) ?? [])
+        );
+        outputFiles = outputFiles.filter((file) => allowedPaths.has(file.relativePath));
+      }
     } catch {}
   }
-
-  res.json({ ...job, outputFiles });
+  res.json({ ...job, outputFiles, artifactManifest });
 });
 
 // 9. GET /api/jobs/:id/events (Server-Sent Events)

@@ -63,6 +63,7 @@ export interface JobRecord {
   progress?: JobProgressData;
   result?: any;
   pipelineBatch?: PipelineBatchData;
+  artifactManifest?: { tasks?: Array<{ id: string; title?: string; url?: string; input?: string; artifacts?: Array<{ path: string; kind: string }> }> };
 }
 
 export interface ToolStatus {

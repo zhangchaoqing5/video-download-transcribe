@@ -1,7 +1,8 @@
 import { mkdir } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { integerOption } from './cli.mjs';
-import { ensureDirectory, writeJson } from './files.mjs';
+import { ensureDirectory } from './files.mjs';
 import { fail } from './errors.mjs';
 import { downloadUrls, normalizeDownloadOptions } from './download.mjs';
 import { normalizeTranscribeOptions, transcribeMedia } from './transcribe.mjs';
@@ -13,8 +14,8 @@ function validateBatchId(batchId) {
   }
 }
 
-/** @param {string} root @param {string} desiredId */
-async function createBatchDirectory(root, desiredId) {
+/** @param {string} root @param {string} desiredId @param {boolean} allowExisting */
+async function createBatchDirectory(root, desiredId, allowExisting = false) {
   await ensureDirectory(root);
   let suffix = 0;
   while (true) {
@@ -22,10 +23,10 @@ async function createBatchDirectory(root, desiredId) {
     const candidate = path.join(root, name);
     try {
       await mkdir(candidate);
-      await mkdir(path.join(candidate, 'items'));
       return candidate;
     } catch (error) {
       if (error && typeof error === 'object' && 'code' in error && error.code === 'EEXIST') {
+        if (suffix === 0 && allowExisting) return candidate;
         suffix += 1;
         continue;
       }
@@ -92,34 +93,6 @@ export function normalizePipelineOptions(raw, cwd = process.cwd()) {
   };
 }
 
-/** @param {{id: string, url: string, directory: string, download: {status: string, error?: string}, transcription: {status: string, error?: string}} item @param {ReturnType<typeof normalizePipelineOptions>} options */
-function taskDocument(item, options) {
-  return {
-    schema_version: 1,
-    task_id: item.id,
-    source: { url: item.url },
-    download: {
-      status: item.download.status,
-      directory: 'video',
-      ...(item.download.error ? { error: item.download.error } : {}),
-    },
-    transcription: {
-      status: item.transcription.status,
-      directory: 'transcript',
-      model: options.transcribe.model,
-      formats: options.transcribe.formats,
-      language: options.transcribe.language,
-      task: options.transcribe.task,
-      ...(item.transcription.error ? { error: item.transcription.error } : {}),
-    },
-  };
-}
-
-/** @param {{directory: string} & Parameters<typeof taskDocument>[0]} item @param {ReturnType<typeof normalizePipelineOptions>} options */
-async function saveTask(item, options) {
-  await writeJson(path.join(item.directory, 'task.json'), taskDocument(item, options));
-}
-
 /**
  * One URL per isolated task directory. Runners may be injected by a future local server or tests.
  * @param {{urls: string[], cwd?: string, logger?: {log: Function, error: Function}, onOutput?: (stream: 'stdout'|'stderr', chunk: string) => void, onProgress?: (progress: {phase: 'preparing'|'transcribing', fileIndex: number, fileCount: number, percentage: number}) => void, checkDependencies?: boolean, downloadRunner?: typeof downloadUrls, transcribeRunner?: typeof transcribeMedia} & Record<string, unknown>} raw
@@ -128,29 +101,18 @@ export async function runPipeline(raw) {
   if (raw.urls.length === 0) fail('请提供至少一个 URL，或使用 --file。');
   const options = normalizePipelineOptions(raw, raw.cwd);
   const logger = raw.logger ?? console;
-  const batchDirectory = await createBatchDirectory(options.runRoot, options.batchId);
+  const batchDirectory = await createBatchDirectory(options.runRoot, options.batchId, Boolean(raw.allowExistingBatchDirectory));
   const batchId = path.basename(batchDirectory);
-  await writeJson(path.join(batchDirectory, 'batch.json'), {
-    schema_version: 1,
-    batch_id: batchId,
-    created_at: new Date().toISOString(),
-    item_count: raw.urls.length,
-    download_only: options.downloadOnly,
-    transcription: {
-      model: options.transcribe.model,
-      formats: options.transcribe.formats,
-      language: options.transcribe.language,
-      task: options.transcribe.task,
-    },
-  });
+  const suppliedTaskIds = Array.isArray(raw.taskIds) && raw.taskIds.length === raw.urls.length
+    ? raw.taskIds.map((id) => String(id))
+    : null;
 
   const items = await Promise.all(raw.urls.map(async (url, index) => {
-    const id = String(index + 1).padStart(3, '0');
-    const directory = path.join(batchDirectory, 'items', id);
-    await ensureDirectory(path.join(directory, 'video'));
-    await ensureDirectory(path.join(directory, 'transcript'));
+    const id = suppliedTaskIds?.[index] ?? `t_${randomUUID().replace(/-/gu, '').slice(0, 12)}`;
+    if (!/^t_[A-Za-z0-9_-]+$/u.test(id)) fail('taskIds 必须是以 t_ 开头的安全唯一标识。');
+    const directory = path.join(batchDirectory, id);
+    await ensureDirectory(directory);
     const item = { id, url, directory, download: { status: 'pending' }, transcription: { status: 'pending' } };
-    await saveTask(item, options);
     return item;
   }));
 
@@ -164,12 +126,13 @@ export async function runPipeline(raw) {
       nextIndex += 1;
       const item = items[index];
       item.download.status = 'running';
-      await saveTask(item, options);
       logger.log(`[下载 ${index + 1}/${items.length}] ${item.url}`);
       try {
         const result = await downloadRunner({
           ...options.download,
-          output: path.join(item.directory, 'video'),
+          output: item.directory,
+          outputTemplate: path.join(item.directory, `${item.id}.%(ext)s`),
+          writeInfoJson: true,
           urls: [item.url],
           parallel: 1,
           checkDependencies: raw.checkDependencies,
@@ -186,7 +149,6 @@ export async function runPipeline(raw) {
         item.download.status = 'failed';
         item.download.error = error instanceof Error ? error.message : String(error);
       }
-      await saveTask(item, options);
     }
   }
   await Promise.all(Array.from({ length: Math.min(options.downloadParallel, items.length) }, downloadWorker));
@@ -194,19 +156,18 @@ export async function runPipeline(raw) {
   if (options.downloadOnly) {
     for (const item of items) {
       item.transcription.status = 'skipped';
-      await saveTask(item, options);
     }
   } else {
     const transcribeRunner = raw.transcribeRunner ?? transcribeMedia;
     for (const item of items.filter((candidate) => candidate.download.status === 'complete')) {
       item.transcription.status = 'running';
-      await saveTask(item, options);
       logger.log(`[转写 ${item.id}]`);
       try {
         await transcribeRunner({
           ...options.transcribe,
-          output: path.join(item.directory, 'transcript'),
-          inputs: [path.join(item.directory, 'video')],
+          output: item.directory,
+          outputStem: item.id,
+          inputs: [item.directory],
           checkDependencies: raw.checkDependencies,
           onOutput: raw.onOutput,
           onProgress: raw.onProgress,
@@ -216,11 +177,9 @@ export async function runPipeline(raw) {
         item.transcription.status = 'failed';
         item.transcription.error = error instanceof Error ? error.message : String(error);
       }
-      await saveTask(item, options);
     }
     for (const item of items.filter((candidate) => candidate.download.status !== 'complete')) {
       item.transcription.status = 'skipped';
-      await saveTask(item, options);
     }
   }
   const failed = items.filter((item) => item.download.status === 'failed' || item.transcription.status === 'failed');

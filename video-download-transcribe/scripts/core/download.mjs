@@ -15,6 +15,8 @@ export function downloadFormat(quality) {
 export function normalizeDownloadOptions(raw, cwd = process.cwd()) {
   const options = {
     output: path.resolve(cwd, String(raw.output ?? 'output')),
+    outputTemplate: raw.outputTemplate ? String(raw.outputTemplate) : undefined,
+    writeInfoJson: Boolean(raw.writeInfoJson),
     quality: String(raw.quality ?? 'best'),
     parallel: integerOption(raw.parallel ?? 1, '--parallel', { min: 1, max: 8 }),
     cookies: String(raw.cookies ?? 'none'),
@@ -40,9 +42,10 @@ export function normalizeDownloadOptions(raw, cwd = process.cwd()) {
 /** @param {ReturnType<typeof normalizeDownloadOptions>} options */
 export function buildYtDlpArgs(options) {
   const args = [
-    '--output', path.join(options.output, '%(uploader|NA)s - %(title)s [%(id)s].%(ext)s'),
+    '--output', options.outputTemplate ?? path.join(options.output, '%(uploader|NA)s - %(title)s [%(id)s].%(ext)s'),
     '--format', downloadFormat(options.quality),
     '--merge-output-format', 'mp4',
+    ...(options.writeInfoJson ? ['--write-info-json'] : []),
     '--no-playlist',
     '--continue',
     '--no-overwrites',
