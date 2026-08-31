@@ -229,7 +229,14 @@ export const JobCenterView: React.FC<JobCenterViewProps> = ({
         try {
           const data = JSON.parse(e.data);
           if (data && data.id) {
-            setActiveJobDetails(data);
+            // The SSE snapshot is intentionally lightweight and may not include
+            // the recursively collected outputFiles returned by the detail API.
+            // Never discard a complete detail snapshot when the two requests race.
+            setActiveJobDetails((previous) => ({
+              ...previous,
+              ...data,
+              outputFiles: data.outputFiles ?? previous?.outputFiles,
+            }));
             setLiveLogs(data.logs || '');
           }
         } catch {}
@@ -276,7 +283,13 @@ export const JobCenterView: React.FC<JobCenterViewProps> = ({
         if (!isMounted) return;
         try {
           const data = JSON.parse(e.data);
-          if (data?.job?.id) setActiveJobDetails(data.job);
+          if (data?.job?.id) {
+            setActiveJobDetails((previous) => ({
+              ...previous,
+              ...data.job,
+              outputFiles: data.job.outputFiles ?? previous?.outputFiles,
+            }));
+          }
           onRefreshJobs();
         } catch {}
       });

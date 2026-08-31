@@ -1101,6 +1101,9 @@ app.get('/api/jobs/:id', (req, res) => {
         const entries = fs.readdirSync(dir, { withFileTypes: true });
         const list: typeof outputFiles = [];
         for (const entry of entries) {
+          // Finder metadata and internal pipeline documents are not user-facing
+          // outputs. Their presence must not create phantom result items.
+          if (entry.name.startsWith('.') || entry.name === 'task.json' || entry.name === 'batch.json' || entry.name === 'job.json') continue;
           const fullPath = path.join(dir, entry.name);
           if (entry.isFile()) {
             const stat = fs.statSync(fullPath);
