@@ -112,7 +112,7 @@ export async function runPipeline(raw) {
     if (!/^t_[A-Za-z0-9_-]+$/u.test(id)) fail('taskIds 必须是以 t_ 开头的安全唯一标识。');
     const directory = path.join(batchDirectory, id);
     await ensureDirectory(directory);
-    const item = { id, url, directory, download: { status: 'pending' }, transcription: { status: 'pending' } };
+    const item = { id, url, directory, title: '', download: { status: 'pending' }, transcription: { status: 'pending' } };
     return item;
   }));
 
@@ -132,7 +132,7 @@ export async function runPipeline(raw) {
           ...options.download,
           output: item.directory,
           outputTemplate: path.join(item.directory, `${item.id}.%(ext)s`),
-          writeInfoJson: true,
+          captureTitle: true,
           urls: [item.url],
           parallel: 1,
           checkDependencies: raw.checkDependencies,
@@ -144,6 +144,7 @@ export async function runPipeline(raw) {
           item.download.error = failure.error ?? 'yt-dlp 下载失败。';
         } else {
           item.download.status = 'complete';
+          item.title = result.results.find((entry) => entry.ok)?.title ?? '';
         }
       } catch (error) {
         item.download.status = 'failed';

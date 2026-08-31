@@ -19,3 +19,7 @@
 - 已定位并修复 Pipeline 运行期误扫公共 `pipeline` 根目录的原因：原逻辑在任务完成后才将 `outputDir` 改为 `pipeline/<jobId>`。现已在创建时固定该目录，并为此前运行的任务提供安全迁移。
 - 任务中心按 Task UUID 清单卡片展示真实标题与来源 URL；本地转写使用原文件名作为标题，并提供来源文件定位和单任务目录入口。
 - 验证完成：`pnpm run check`、`pnpm run build`、`git diff --check` 以及注入式 Pipeline 隔离 smoke test 均通过。项目未配置 Vitest，因此未运行不存在的测试命令。
+- 已移除新下载与 Pipeline 生成 `.info.json` 的逻辑；yt-dlp 标题通过标准输出写入 `job.json`，旧任务遗留的 `.info.json` 继续在结果列表中隐藏。
+- 成果卡片标题已改为最多 32 个字符加 `...`；URL 任务以标题本身作为跳转链接，并使用悬浮提示展示完整标题。
+- URL 提交与历史展示会补全缺失的 `https://` 协议，避免 `youtu.be/...` 被浏览器作为 localhost 相对路径打开。
+- 成果卡片操作区已统一为带图标的按钮样式；任务目录、来源定位、预览/播放、定位与下载均有悬浮反馈和 `cursor-pointer`。

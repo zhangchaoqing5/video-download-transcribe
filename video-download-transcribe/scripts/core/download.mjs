@@ -16,7 +16,7 @@ export function normalizeDownloadOptions(raw, cwd = process.cwd()) {
   const options = {
     output: path.resolve(cwd, String(raw.output ?? 'output')),
     outputTemplate: raw.outputTemplate ? String(raw.outputTemplate) : undefined,
-    writeInfoJson: Boolean(raw.writeInfoJson),
+    captureTitle: Boolean(raw.captureTitle),
     quality: String(raw.quality ?? 'best'),
     parallel: integerOption(raw.parallel ?? 1, '--parallel', { min: 1, max: 8 }),
     cookies: String(raw.cookies ?? 'none'),
@@ -45,7 +45,7 @@ export function buildYtDlpArgs(options) {
     '--output', options.outputTemplate ?? path.join(options.output, '%(uploader|NA)s - %(title)s [%(id)s].%(ext)s'),
     '--format', downloadFormat(options.quality),
     '--merge-output-format', 'mp4',
-    ...(options.writeInfoJson ? ['--write-info-json'] : []),
+    ...(options.captureTitle ? ['--print', 'after_move:__VDT_TITLE__%(title)s'] : []),
     '--no-playlist',
     '--continue',
     '--no-overwrites',
@@ -79,7 +79,7 @@ export async function downloadUrls(raw) {
   }
   await ensureDirectory(options.output);
 
-  /** @type {{url: string, ok: boolean, error?: string}[]} */
+  /** @type {{url: string, ok: boolean, error?: string, title?: string}[]} */
   const results = new Array(raw.urls.length);
   let nextIndex = 0;
   async function worker() {
@@ -89,8 +89,23 @@ export async function downloadUrls(raw) {
       const url = raw.urls[index];
       raw.onEvent?.({ type: 'download-start', url, index, total: raw.urls.length });
       try {
-        await runCommand(options.ytDlp, [...buildYtDlpArgs(options), url], { onOutput: raw.onOutput });
-        results[index] = { url, ok: true };
+        let title = '';
+        let stdoutTail = '';
+        await runCommand(options.ytDlp, [...buildYtDlpArgs(options), url], {
+          onOutput: (stream, chunk) => {
+            if (stream === 'stdout' && options.captureTitle) {
+              stdoutTail += chunk;
+              const lines = stdoutTail.split(/\r?\n/u);
+              stdoutTail = lines.pop() ?? '';
+              for (const line of lines) {
+                if (line.startsWith('__VDT_TITLE__')) title = line.slice('__VDT_TITLE__'.length).trim();
+              }
+            }
+            raw.onOutput?.(stream, chunk);
+          },
+        });
+        if (options.captureTitle && stdoutTail.startsWith('__VDT_TITLE__')) title = stdoutTail.slice('__VDT_TITLE__'.length).trim();
+        results[index] = { url, ok: true, ...(title ? { title } : {}) };
         raw.onEvent?.({ type: 'download-complete', url, index, total: raw.urls.length });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);

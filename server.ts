@@ -468,6 +468,18 @@ function isSafeJobId(jobId: string) {
   return /^[A-Za-z0-9_-]+$/u.test(jobId);
 }
 
+function normalizeSourceUrl(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) return trimmed;
+  const candidate = /^https?:\/\//iu.test(trimmed) ? trimmed : `https://${trimmed}`;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : trimmed;
+  } catch {
+    return trimmed;
+  }
+}
+
 const LOCAL_MEDIA_EXTENSIONS = new Set(['.mp4', '.m4v', '.mov', '.mkv', '.webm', '.mp3', '.m4a', '.wav', '.flac', '.ogg', '.opus', '.aac']);
 function collectLocalMedia(input: string, recursive: boolean): string[] {
   const stat = fs.statSync(input);
@@ -721,7 +733,7 @@ app.post('/api/jobs/download', async (req, res) => {
     ? options.urls.split('\n')
     : [];
 
-  const validUrls = urls.map((u) => u.trim()).filter((u) => u && !u.startsWith('#'));
+  const validUrls = urls.map(normalizeSourceUrl).filter((u) => u && !u.startsWith('#'));
   if (validUrls.length === 0) {
     return res.status(400).json({ error: '请提供至少一个有效的视频 URL' });
   }
@@ -761,11 +773,10 @@ app.post('/api/jobs/download', async (req, res) => {
       for (const task of taskEntries) {
         const taskDir = path.join(outputDir, task.id);
         fs.mkdirSync(taskDir, { recursive: true });
-        const result = await downloadUrls({ ...options, urls: [task.url], output: taskDir, outputTemplate: path.join(taskDir, `${task.id}.%(ext)s`), writeInfoJson: true, cookiesFile: options.cookiesFile ? resolvePath(options.cookiesFile) : undefined, remoteEjs: normalizeRemoteEjs(options.remoteEjs), onOutput: (stream, chunk) => appendJobLog(job, stream, chunk) });
+        const result = await downloadUrls({ ...options, urls: [task.url], output: taskDir, outputTemplate: path.join(taskDir, `${task.id}.%(ext)s`), captureTitle: true, cookiesFile: options.cookiesFile ? resolvePath(options.cookiesFile) : undefined, remoteEjs: normalizeRemoteEjs(options.remoteEjs), onOutput: (stream, chunk) => appendJobLog(job, stream, chunk) });
         const taskFiles = fs.readdirSync(taskDir).filter((file) => !file.startsWith('.'));
-        const infoFile = taskFiles.find((file) => file.endsWith('.info.json'));
-        if (infoFile) try { task.title = JSON.parse(fs.readFileSync(path.join(taskDir, infoFile), 'utf8')).title; } catch {}
-        task.artifacts = taskFiles.filter((file) => !file.endsWith('.info.json')).map((file) => ({ path: path.join(task.id, file), kind: 'video' }));
+        task.title = result.results.find((entry) => entry.ok)?.title || task.url;
+        task.artifacts = taskFiles.map((file) => ({ path: path.join(task.id, file), kind: 'video' }));
         results.push(...result.results);
         fs.writeFileSync(path.join(outputDir, 'job.json'), JSON.stringify({ id: jobId, kind: 'download', tasks: taskEntries }, null, 2));
       }
@@ -942,7 +953,7 @@ app.post('/api/jobs/pipeline', async (req, res) => {
     ? options.urls.split('\n')
     : [];
 
-  const validUrls = urls.map((u) => u.trim()).filter((u) => u && !u.startsWith('#'));
+  const validUrls = urls.map(normalizeSourceUrl).filter((u) => u && !u.startsWith('#'));
   if (validUrls.length === 0) {
     return res.status(400).json({ error: '请提供至少一个有效的视频 URL' });
   }
@@ -1012,7 +1023,7 @@ app.post('/api/jobs/pipeline', async (req, res) => {
       job.outputDir = result.batchDirectory;
       const tasks = result.items.map((item: any) => ({
         id: item.id,
-        title: (() => { try { const info = fs.readdirSync(item.directory).find((file) => file.endsWith('.info.json')); return info ? JSON.parse(fs.readFileSync(path.join(item.directory, info), 'utf8')).title : item.url; } catch { return item.url; } })(),
+        title: item.title || item.url,
         url: item.url,
         artifacts: fs.readdirSync(item.directory).filter((file) => !file.startsWith('.') && !file.endsWith('.info.json')).map((file) => ({ path: path.join(item.id, file), kind: path.extname(file).toLowerCase() === '.mp4' ? 'video' : 'transcript' })),
       }));

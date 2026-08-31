@@ -1,6 +1,8 @@
 export interface DownloadOptions {
   urls: string[];
   output?: string;
+  outputTemplate?: string;
+  captureTitle?: boolean;
   quality?: string;
   parallel?: number;
   cookies?: 'none' | 'browser' | 'file';
@@ -20,7 +22,7 @@ export interface DownloadOptions {
 
 export interface DownloadResult {
   options: Record<string, any>;
-  results: Array<{ url: string; ok: boolean; error?: string }>;
+  results: Array<{ url: string; ok: boolean; error?: string; title?: string }>;
 }
 
 export interface ModelDownloadOptions {
@@ -105,6 +107,7 @@ export interface PipelineResult {
   items: Array<{
     id: string;
     url: string;
+    title?: string;
     directory: string;
     download: { status: string; error?: string };
     transcription: { status: string; error?: string };

@@ -67,6 +67,25 @@ interface JobCenterViewProps {
 
 type DateFilterPreset = 'all' | 'today' | 'yesterday' | 'week' | 'custom';
 
+const RESULT_TITLE_MAX_CHARS = 32;
+
+function truncateResultTitle(value: string) {
+  return value.length > RESULT_TITLE_MAX_CHARS
+    ? `${value.slice(0, RESULT_TITLE_MAX_CHARS)}...`
+    : value;
+}
+
+function toExternalHttpUrl(value?: string) {
+  if (!value) return undefined;
+  const candidate = /^https?:\/\//iu.test(value) ? value : `https://${value}`;
+  try {
+    const parsed = new URL(candidate);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export const JobCenterView: React.FC<JobCenterViewProps> = ({
   jobs,
   selectedJobId,
@@ -959,16 +978,36 @@ export const JobCenterView: React.FC<JobCenterViewProps> = ({
                         const files = (activeJobDetails.outputFiles || []).filter((file) =>
                           task.artifacts?.some((artifact) => file.relativePath === artifact.path)
                         );
-                        const source = task.url || task.input;
+                        const taskTitle = task.title || task.url || task.input || task.id;
+                        const displayTitle = truncateResultTitle(taskTitle);
+                        const sourceUrl = toExternalHttpUrl(task.url);
                         return <div key={task.id} className="p-4 rounded-xl border border-zinc-800 bg-zinc-950/70 space-y-3">
-                          <div className="min-w-0"><h5 className="font-semibold text-zinc-100 truncate">{task.title || task.url || task.input || task.id}</h5>
-                            {source && (task.url ? <a href={task.url} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:underline truncate block">来源：{task.url}</a> : <div className="flex items-center gap-2"><p className="text-xs text-zinc-400 truncate">本地文件：{task.input}</p><button onClick={() => handleRevealPath(task.input!)} className="shrink-0 text-xs text-zinc-300 hover:text-white">定位来源</button></div>)}</div>
-                          {activeJobDetails.outputDir && <button onClick={() => handleRevealPath(`${activeJobDetails.outputDir}/${task.id}`)} className="text-xs text-zinc-300 hover:text-white">打开此任务目录</button>}
-                          <div className="flex flex-wrap gap-2">{files.map((file) => <div key={file.path} className="inline-flex items-center gap-2 px-2 py-1 rounded border border-zinc-800 text-xs">
-                            <span className="text-zinc-300">{getFormatBadge(file.ext)}</span>
-                            {file.previewType === 'media' && <button onClick={() => setMediaModalState({ filePath: file.path, fileName: task.title, fileSize: file.size, ext: file.ext, mediaType: file.category === 'audio' ? 'audio' : 'video' })} className="text-blue-400">播放</button>}
-                            {file.previewType === 'text' && <button onClick={() => setTextModalState({ filePath: file.path, fileName: task.title, ext: file.ext })} className="text-amber-400">预览</button>}
-                            <button onClick={() => handleRevealPath(file.path)} className="text-zinc-300">定位</button><button onClick={() => handleDownloadFile(file.path, file.name)} className="text-zinc-300">下载</button>
+                          <div className="flex items-start justify-between gap-3 pb-3 border-b border-zinc-800/80">
+                            <div className="min-w-0">
+                              {sourceUrl ? (
+                                <a href={sourceUrl} target="_blank" rel="noopener noreferrer" title={taskTitle} className="block font-semibold text-blue-400 hover:text-blue-300 hover:underline">
+                                  {displayTitle}
+                                </a>
+                              ) : (
+                                <h5 title={taskTitle} className="font-semibold text-zinc-100">{displayTitle}</h5>
+                              )}
+                              {task.input && <div className="flex items-center gap-2 mt-1"><p className="text-xs text-zinc-400 truncate">本地文件：{task.input}</p><button type="button" onClick={() => handleRevealPath(task.input!)} className="inline-flex shrink-0 items-center gap-1 px-2 py-1 text-[11px] font-medium btn-secondary rounded-lg cursor-pointer transition-colors active:scale-[0.98]" title="在系统文件管理器中定位来源文件"><FolderOpen className="w-3 h-3" />定位来源</button></div>}
+                            </div>
+                            {activeJobDetails.outputDir && <button type="button" onClick={() => handleRevealPath(`${activeJobDetails.outputDir}/${task.id}`)} disabled={revealingPath === `${activeJobDetails.outputDir}/${task.id}`} className="inline-flex shrink-0 items-center gap-1.5 px-2.5 py-1.5 text-xs font-medium btn-secondary rounded-lg cursor-pointer transition-colors active:scale-[0.98] disabled:cursor-wait disabled:opacity-60" title="在文件管理器中打开该输入对应的全部产物"><FolderOpen className="w-3.5 h-3.5" /><span>{revealingPath === `${activeJobDetails.outputDir}/${task.id}` ? '打开中…' : '打开此任务目录'}</span></button>}
+                          </div>
+                          <div className="grid grid-cols-1 gap-2">{files.map((file) => <div key={file.path} className="flex items-center justify-between gap-3 p-2.5 rounded-lg border border-zinc-800 bg-zinc-900/80 hover:border-zinc-700 transition-colors">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <div className={`w-8 h-8 rounded-lg border flex items-center justify-center shrink-0 ${file.previewType === 'media' ? 'bg-blue-500/10 border-blue-500/30 text-blue-400' : 'bg-amber-500/10 border-amber-500/30 text-amber-400'}`}>
+                                {file.previewType === 'media' ? <Video className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
+                              </div>
+                              <div className="min-w-0"><span className="text-xs font-semibold text-zinc-100">{getFormatBadge(file.ext)}</span><p className="text-[11px] text-zinc-500 font-mono">{formatFileSize(file.size)}</p></div>
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {file.previewType === 'media' && <button type="button" onClick={() => setMediaModalState({ filePath: file.path, fileName: taskTitle, fileSize: file.size, ext: file.ext, mediaType: file.category === 'audio' ? 'audio' : 'video' })} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold btn-primary rounded-lg cursor-pointer transition-colors active:scale-[0.98]" title="在页面中直接播放媒体"><Play className="w-3 h-3 fill-current" />播放</button>}
+                              {file.previewType === 'text' && <button type="button" onClick={() => setTextModalState({ filePath: file.path, fileName: taskTitle, ext: file.ext })} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-semibold btn-secondary rounded-lg cursor-pointer transition-colors active:scale-[0.98]" title="预览文本内容"><Eye className="w-3 h-3 text-amber-400" />预览</button>}
+                              <button type="button" onClick={() => handleRevealPath(file.path)} disabled={revealingPath === file.path} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium btn-secondary rounded-lg cursor-pointer transition-colors active:scale-[0.98] disabled:cursor-wait disabled:opacity-60" title="在文件管理器中显示此文件"><FolderOpen className="w-3 h-3" /><span>{revealingPath === file.path ? '定位中…' : '定位'}</span></button>
+                              <button type="button" onClick={() => handleDownloadFile(file.path, file.name)} className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium btn-secondary rounded-lg cursor-pointer transition-colors active:scale-[0.98]" title="下载此文件"><Download className="w-3 h-3" />下载</button>
+                            </div>
                           </div>)}</div>
                         </div>;
                       })}
