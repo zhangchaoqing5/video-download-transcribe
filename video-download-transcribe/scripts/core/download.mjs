@@ -1,10 +1,13 @@
 import path from 'node:path';
 import os from 'node:os';
+import { fileURLToPath } from 'node:url';
 import { readdir } from 'node:fs/promises';
 import { ensureDirectory, requireReadableFile } from './files.mjs';
 import { enumOption, integerOption } from './cli.mjs';
 import { fail } from './errors.mjs';
 import { requireCommand, runCommand } from './process.mjs';
+
+const ytDlpPluginDir = fileURLToPath(new URL('../../yt-dlp-plugins', import.meta.url));
 
 /** @param {string} quality */
 export function downloadFormat(quality) {
@@ -54,6 +57,7 @@ export function buildYtDlpArgs(options) {
     '--progress',
     '--newline',
     '--progress-delta', '1',
+    '--plugin-dirs', ytDlpPluginDir,
   ];
   if (options.cookies === 'browser') {
     args.push('--cookies-from-browser', options.browserProfile ? `${options.browser}:${options.browserProfile}` : options.browser);

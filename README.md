@@ -101,6 +101,8 @@ Skill 的 Agent 使用约束、全部参数和状态文件规则见 [video-downl
 
 如果 macOS 上选择 Chrome Cookie 后提示 `could not find chrome cookies database`，先在启动服务的同一个命令行窗口检查运行 `yt-dlp` 所用的 Python 能否列出 Chrome 配置目录。即使 `ls` 能看到已知的 `Cookies` 文件，Python 仍可能在列目录时收到 `Operation not permitted`，而 yt-dlp 会把它显示为“找不到数据库”。此时需要在系统的“隐私与安全性 → 完全磁盘访问权限”中检查承载该命令行的应用：在 IntelliJ IDEA 内置终端运行就检查 IntelliJ IDEA.app，不能只检查系统的终端.app。完全退出并重新打开对应应用后重试；不希望授予该权限时，可在页面上改选 Netscape 格式 Cookie 文件。项目不会自动更改系统权限或导出 Cookie。
 
+VDT 下载时会从项目内的 `video-download-transcribe/yt-dlp-plugins/` 加载抖音兼容插件。插件只替换抖音视频详情请求，使用浏览器或文件 Cookie 中的 `UIFID`/`UIFID_TEMP` 计算签名；画质选择、文件命名和实际媒体下载仍由 yt-dlp 完成。它不会安装到全局 yt-dlp。直接在终端运行普通 `yt-dlp` 命令时不会自动加载这个项目插件。
+
 ## 开发说明
 
 - 根项目与 `video-download-transcribe/` 是 pnpm workspace；一次 `pnpm install` 会安装两者所需依赖。
