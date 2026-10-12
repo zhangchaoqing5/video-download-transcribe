@@ -99,6 +99,8 @@ Skill 的 Agent 使用约束、全部参数和状态文件规则见 [video-downl
 - `.local-data/` 仅保存本地任务状态，已被 Git 忽略。
 - 请只下载自己拥有或已获授权访问的内容，并遵守目标站点的服务条款和适用法律。
 
+如果 macOS 上选择 Chrome Cookie 后提示 `could not find chrome cookies database`，先在启动服务的同一个命令行窗口检查运行 `yt-dlp` 所用的 Python 能否列出 Chrome 配置目录。即使 `ls` 能看到已知的 `Cookies` 文件，Python 仍可能在列目录时收到 `Operation not permitted`，而 yt-dlp 会把它显示为“找不到数据库”。此时需要在系统的“隐私与安全性 → 完全磁盘访问权限”中检查承载该命令行的应用：在 IntelliJ IDEA 内置终端运行就检查 IntelliJ IDEA.app，不能只检查系统的终端.app。完全退出并重新打开对应应用后重试；不希望授予该权限时，可在页面上改选 Netscape 格式 Cookie 文件。项目不会自动更改系统权限或导出 Cookie。
+
 ## 开发说明
 
 - 根项目与 `video-download-transcribe/` 是 pnpm workspace；一次 `pnpm install` 会安装两者所需依赖。

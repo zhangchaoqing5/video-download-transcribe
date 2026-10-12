@@ -1,4 +1,6 @@
 import path from 'node:path';
+import os from 'node:os';
+import { readdir } from 'node:fs/promises';
 import { ensureDirectory, requireReadableFile } from './files.mjs';
 import { enumOption, integerOption } from './cli.mjs';
 import { fail } from './errors.mjs';
@@ -64,6 +66,27 @@ export function buildYtDlpArgs(options) {
   return args;
 }
 
+async function explainChromeCookieError(options, stderr) {
+  if (process.platform !== 'darwin' || options.cookies !== 'browser' || options.browser !== 'chrome'
+    || !stderr.includes('could not find chrome cookies database')) return null;
+
+  const chromeDir = path.join(os.homedir(), 'Library/Application Support/Google/Chrome');
+  const profileDir = options.browserProfile
+    ? (path.isAbsolute(options.browserProfile) ? options.browserProfile : path.join(chromeDir, options.browserProfile))
+    : path.join(chromeDir, 'Default');
+  try {
+    const entries = await readdir(profileDir);
+    if (entries.includes('Cookies') || entries.includes('Network')) {
+      return `Chrome 配置目录存在，但 yt-dlp 无法在其中找到 Cookie 数据库：${profileDir}。请检查运行 yt-dlp 的 Python 是否有权列出此目录；可在“系统设置 → 隐私与安全性 → 完全磁盘访问权限”中检查承载命令行的应用（例如 IntelliJ IDEA 内置终端对应 IntelliJ IDEA.app），完全退出并重新打开该应用后重试。也可以在页面中改选 Cookie 文件。`;
+    }
+  } catch (error) {
+    if (error?.code === 'EPERM' || error?.code === 'EACCES') {
+      return `当前进程无权列出 Chrome 配置目录：${profileDir}。macOS 拒绝了目录访问，请在“系统设置 → 隐私与安全性 → 完全磁盘访问权限”中检查承载命令行的应用（例如 IntelliJ IDEA 内置终端对应 IntelliJ IDEA.app），完全退出并重新打开该应用后重试；也可以在页面中改选 Cookie 文件。`;
+    }
+  }
+  return null;
+}
+
 /**
  * Download URLs while preserving yt-dlp's own progress output.
  * @param {{urls: string[], onEvent?: (event: Record<string, unknown>) => void, checkDependencies?: boolean, cwd?: string, onOutput?: (stream: 'stdout'|'stderr', chunk: string) => void} & Record<string, unknown>} raw
@@ -88,11 +111,13 @@ export async function downloadUrls(raw) {
       nextIndex += 1;
       const url = raw.urls[index];
       raw.onEvent?.({ type: 'download-start', url, index, total: raw.urls.length });
+      let stderrTail = '';
       try {
         let title = '';
         let stdoutTail = '';
         await runCommand(options.ytDlp, [...buildYtDlpArgs(options), url], {
           onOutput: (stream, chunk) => {
+            if (stream === 'stderr') stderrTail = (stderrTail + chunk).slice(-4000);
             if (stream === 'stdout' && options.captureTitle) {
               stdoutTail += chunk;
               const lines = stdoutTail.split(/\r?\n/u);
@@ -108,7 +133,8 @@ export async function downloadUrls(raw) {
         results[index] = { url, ok: true, ...(title ? { title } : {}) };
         raw.onEvent?.({ type: 'download-complete', url, index, total: raw.urls.length });
       } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
+        const message = await explainChromeCookieError(options, stderrTail)
+          ?? (error instanceof Error ? error.message : String(error));
         results[index] = { url, ok: false, error: message };
         raw.onEvent?.({ type: 'download-failed', url, index, total: raw.urls.length, error: message });
       }
