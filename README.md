@@ -101,6 +101,20 @@ Skill 的 Agent 使用约束、全部参数和状态文件规则见 [video-downl
 
 如果 macOS 上选择 Chrome Cookie 后提示 `could not find chrome cookies database`，先在启动服务的同一个命令行窗口检查运行 `yt-dlp` 所用的 Python 能否列出 Chrome 配置目录。即使 `ls` 能看到已知的 `Cookies` 文件，Python 仍可能在列目录时收到 `Operation not permitted`，而 yt-dlp 会把它显示为“找不到数据库”。此时需要在系统的“隐私与安全性 → 完全磁盘访问权限”中检查承载该命令行的应用：在 IntelliJ IDEA 内置终端运行就检查 IntelliJ IDEA.app，不能只检查系统的终端.app。完全退出并重新打开对应应用后重试；不希望授予该权限时，可在页面上改选 Netscape 格式 Cookie 文件。项目不会自动更改系统权限或导出 Cookie。
 
+## 抖音详情接口 403：上游跟踪（2026-10-12）
+
+在本机使用 yt-dlp `2026.08.19` 和 Chrome Cookie 时，Cookie 已成功读取，但抖音视频详情接口返回 `HTTP 403`，随后 yt-dlp 提示 `Fresh cookies ... are needed`。同一环境下 YouTube 下载正常，Chrome 中的抖音视频也能播放。这是详情请求被拒绝，与上面的 Chrome Cookie 数据库访问权限错误是两个问题。
+
+上游 [yt-dlp issue #9667](https://github.com/yt-dlp/yt-dlp/issues/9667) 在记录当日仍为 Open。讨论中有人报告详情接口开始校验 `uifid` 和 `x-secsdk-web-signature` 等信息；本项目的本地探针使用这些信息获得了详情响应，并成功下载、验证了一个视频。这说明该请求方式在测试环境中可用，不代表官方 yt-dlp 已修复。
+
+临时插件实现保存在独立分支 `codex/douyin-signed-extractor`，**没有合并到 `main`**。需要该方案时可使用此分支；`main` 继续使用官方 yt-dlp 的抖音提取器。
+
+后续回到官方实现的步骤：
+
+1. 查看 issue #9667、相关修复是否合入，以及**发布的 yt-dlp 版本**是否包含修复；issue 关闭本身不等于已发布可用版本。
+2. 在 `main` 上由使用者手动更新 yt-dlp，先用 Chrome Cookie 验证抖音直链和短链接的详情提取、实际下载，再检查 VDT 页面下载和 YouTube 下载。
+3. 全部通过后继续使用 `main`，保留临时分支作记录，无需合并插件；若官方版本仍返回 403，则继续使用临时分支并跟踪上游。
+
 ## 开发说明
 
 - 根项目与 `video-download-transcribe/` 是 pnpm workspace；一次 `pnpm install` 会安装两者所需依赖。
